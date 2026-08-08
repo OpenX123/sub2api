@@ -17,6 +17,7 @@ import (
 type openCodeGoHTTPUpstream struct {
 	request *http.Request
 	body    string
+	profile *tlsfingerprint.Profile
 }
 
 func (u *openCodeGoHTTPUpstream) Do(req *http.Request, _ string, _ int64, _ int) (*http.Response, error) {
@@ -32,7 +33,8 @@ func (u *openCodeGoHTTPUpstream) Do(req *http.Request, _ string, _ int64, _ int)
 	}, nil
 }
 
-func (u *openCodeGoHTTPUpstream) DoWithTLS(req *http.Request, proxyURL string, accountID int64, accountConcurrency int, _ *tlsfingerprint.Profile) (*http.Response, error) {
+func (u *openCodeGoHTTPUpstream) DoWithTLS(req *http.Request, proxyURL string, accountID int64, accountConcurrency int, profile *tlsfingerprint.Profile) (*http.Response, error) {
+	u.profile = profile
 	return u.Do(req, proxyURL, accountID, accountConcurrency)
 }
 
@@ -65,7 +67,9 @@ func TestForwardAsAnthropicOpenCodeGoUsesNativeMessages(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, result)
 	require.Equal(t, "/zen/go/v1/messages", upstream.request.URL.Path)
-	require.Equal(t, "Bearer go-secret", upstream.request.Header.Get("Authorization"))
+	require.Equal(t, "go-secret", upstream.request.Header.Get("x-api-key"))
+	require.Empty(t, upstream.request.Header.Get("Authorization"))
+	require.Equal(t, "OpenCode Go (Node.js 24.x)", upstream.profile.Name)
 	require.JSONEq(t, string(body), upstream.body)
 	require.Equal(t, 3, result.Usage.InputTokens)
 	require.Equal(t, 2, result.Usage.OutputTokens)

@@ -9,10 +9,26 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Wei-Shaw/sub2api/internal/pkg/tlsfingerprint"
 	"github.com/Wei-Shaw/sub2api/internal/util/responseheaders"
 	"github.com/gin-gonic/gin"
 	"github.com/tidwall/gjson"
 )
+
+func openCodeGoTLSProfile() *tlsfingerprint.Profile {
+	return &tlsfingerprint.Profile{Name: "OpenCode Go (Node.js 24.x)"}
+}
+
+func (s *OpenAIGatewayService) doOpenCodeGoAwareRequest(
+	req *http.Request,
+	proxyURL string,
+	account *Account,
+) (*http.Response, error) {
+	if account != nil && account.IsOpenCodeGo() {
+		return s.httpUpstream.DoWithTLS(req, proxyURL, account.ID, account.Concurrency, openCodeGoTLSProfile())
+	}
+	return s.httpUpstream.Do(req, proxyURL, account.ID, account.Concurrency)
+}
 
 // forwardOpenCodeGoMessages preserves the native Anthropic Messages wire
 // format used by MiniMax and Qwen on OpenCode Go. Converting these requests to
@@ -41,7 +57,7 @@ func (s *OpenAIGatewayService) forwardOpenCodeGoMessages(
 	}
 	req = req.WithContext(WithHTTPUpstreamProfile(req.Context(), HTTPUpstreamProfileOpenAI))
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+account.GetOpenAIApiKey())
+	req.Header.Set("x-api-key", account.GetOpenAIApiKey())
 	req.Header.Set("anthropic-version", "2023-06-01")
 	if stream {
 		req.Header.Set("Accept", "text/event-stream")
@@ -54,7 +70,7 @@ func (s *OpenAIGatewayService) forwardOpenCodeGoMessages(
 	if account.ProxyID != nil && account.Proxy != nil {
 		proxyURL = account.Proxy.URL()
 	}
-	resp, err := s.httpUpstream.Do(req, proxyURL, account.ID, account.Concurrency)
+	resp, err := s.doOpenCodeGoAwareRequest(req, proxyURL, account)
 	if err != nil {
 		return nil, s.handleOpenAIUpstreamTransportError(ctx, c, account, err, false)
 	}
