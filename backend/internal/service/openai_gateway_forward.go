@@ -13,6 +13,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/openai"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/openai_compat"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/opencodego"
 	"github.com/gin-gonic/gin"
 	"github.com/tidwall/gjson"
 )
@@ -106,6 +107,20 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 
 	if account.Platform == PlatformGrok {
 		return s.forwardGrokResponses(ctx, c, account, body, originalModel, reqStream, startTime)
+	}
+	if account.IsOpenCodeGo() {
+		switch opencodego.EndpointForModel(reqModel) {
+		case opencodego.EndpointChatCompletions:
+			return s.forwardResponsesViaRawChatCompletions(ctx, c, account, body)
+		case opencodego.EndpointMessages:
+			c.JSON(http.StatusBadRequest, gin.H{"error": gin.H{
+				"type":    "invalid_request_error",
+				"message": "This OpenCode Go model uses /v1/messages; send an Anthropic Messages request for this model",
+			}})
+			return nil, fmt.Errorf("OpenCode Go model %s requires /v1/messages", reqModel)
+		case opencodego.EndpointResponses:
+			// Continue through the native Responses path.
+		}
 	}
 
 	if account.Type == AccountTypeAPIKey && !openai_compat.ShouldUseResponsesAPI(account.Extra) {

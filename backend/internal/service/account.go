@@ -15,6 +15,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/domain"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/openai_compat"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/opencodego"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/xai"
 )
 
@@ -1274,6 +1275,10 @@ func (a *Account) IsOpenAIPersonalAccessToken() bool {
 
 func (a *Account) IsOpenAIApiKey() bool {
 	return a.IsOpenAI() && a.Type == AccountTypeAPIKey
+}
+
+func (a *Account) IsOpenCodeGo() bool {
+	return a.IsOpenAIApiKey() && opencodego.IsBaseURL(a.GetCredential("base_url"))
 }
 
 func (a *Account) GetOpenAIBaseURL() string {

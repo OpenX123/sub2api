@@ -13,6 +13,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/pkg/apicompat"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/openai_compat"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/opencodego"
 	"github.com/Wei-Shaw/sub2api/internal/util/responseheaders"
 	"github.com/gin-gonic/gin"
 	"github.com/tidwall/gjson"
@@ -89,6 +90,21 @@ func (s *OpenAIGatewayService) ForwardAsChatCompletions(
 
 	// 入口分流：APIKey 账号 + 强制或已探测确认上游不支持 Responses，走 CC 直转。
 	// 自动模式下标记缺失（未探测）按"现状即证据"原则继续走下方原 Responses 转换路径。
+	if account.IsOpenCodeGo() {
+		model := gjson.GetBytes(body, "model").String()
+		switch opencodego.EndpointForModel(model) {
+		case opencodego.EndpointChatCompletions:
+			return s.forwardAsRawChatCompletions(ctx, c, account, body, defaultMappedModel)
+		case opencodego.EndpointMessages:
+			c.JSON(http.StatusBadRequest, gin.H{"error": gin.H{
+				"type":    "invalid_request_error",
+				"message": "This OpenCode Go model uses /v1/messages; send an Anthropic Messages request for this model",
+			}})
+			return nil, fmt.Errorf("OpenCode Go model %s requires /v1/messages", model)
+		case opencodego.EndpointResponses:
+			// Continue through the Chat Completions -> Responses bridge.
+		}
+	}
 	if account.Type == AccountTypeAPIKey && !openai_compat.ShouldUseResponsesAPI(account.Extra) {
 		return s.forwardAsRawChatCompletions(ctx, c, account, body, defaultMappedModel)
 	}

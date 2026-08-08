@@ -2514,6 +2514,27 @@ func (h *AccountHandler) GetAvailableModels(c *gin.Context) {
 
 	// Handle OpenAI accounts
 	if account.IsOpenAI() {
+		// OpenCode Go changes its catalog independently of OpenAI. Ask the
+		// official upstream first so the test picker cannot drift to sub2api's
+		// built-in OpenAI list. Stored mappings remain the failure fallback.
+		if account.IsOpenCodeGo() && h.accountTestService != nil {
+			if modelIDs, fetchErr := h.accountTestService.FetchUpstreamSupportedModels(c.Request.Context(), account); fetchErr == nil && len(modelIDs) > 0 {
+				models := make([]openai.Model, 0, len(modelIDs))
+				for _, modelID := range modelIDs {
+					models = append(models, openai.Model{
+						ID:          modelID,
+						Object:      "model",
+						OwnedBy:     "opencode",
+						Type:        "model",
+						DisplayName: modelID,
+					})
+				}
+				response.Success(c, models)
+				return
+			} else if fetchErr != nil {
+				slog.Warn("opencode_go_available_models_fetch_failed", "account_id", account.ID)
+			}
+		}
 		// OpenAI 自动透传会绕过常规模型改写，测试/模型列表也应回落到默认模型集。
 		if account.IsOpenAIPassthroughEnabled() {
 			response.Success(c, openai.DefaultModels)
