@@ -19,6 +19,17 @@ func openCodeGoTLSProfile() *tlsfingerprint.Profile {
 	return &tlsfingerprint.Profile{Name: "OpenCode Go (Node.js 24.x)"}
 }
 
+func isOpenCodeGoModelAccessError(account *Account, statusCode int, body []byte) bool {
+	if account == nil || !account.IsOpenCodeGo() || statusCode != http.StatusForbidden {
+		return false
+	}
+	errorType := strings.ToLower(strings.TrimSpace(gjson.GetBytes(body, "error.type").String()))
+	message := strings.ToLower(strings.TrimSpace(gjson.GetBytes(body, "error.message").String()))
+	return errorType == "regionerror" ||
+		strings.Contains(message, "not available in your region") ||
+		strings.Contains(message, "requires explicit opt in")
+}
+
 func (s *OpenAIGatewayService) doOpenCodeGoAwareRequest(
 	req *http.Request,
 	proxyURL string,

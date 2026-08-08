@@ -76,3 +76,18 @@ func TestForwardAsAnthropicOpenCodeGoUsesNativeMessages(t *testing.T) {
 	require.Equal(t, "/v1/messages", result.UpstreamEndpoint)
 	require.Contains(t, recorder.Body.String(), `"text":"ok"`)
 }
+
+func TestOpenCodeGoRegionErrorDoesNotDisableWholeAccount(t *testing.T) {
+	account := &Account{
+		Platform: PlatformOpenAI,
+		Type:     AccountTypeAPIKey,
+		Credentials: map[string]any{
+			"api_key":  "go-secret",
+			"base_url": "https://opencode.ai/zen/go",
+		},
+	}
+	body := []byte(`{"type":"error","error":{"type":"RegionError","message":"This model is not available in your region."}}`)
+
+	require.True(t, isOpenCodeGoModelAccessError(account, http.StatusForbidden, body))
+	require.False(t, (&OpenAIGatewayService{}).handleOpenAIAccountUpstreamError(context.Background(), account, http.StatusForbidden, nil, body, "gpt-5.6-luna"))
+}
