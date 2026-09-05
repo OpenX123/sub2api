@@ -287,6 +287,11 @@ func (s *OpenAIGatewayService) ForwardAsChatCompletions(
 		return nil, policyErr
 	}
 	responsesBody = updatedBody
+	if normalizedBody, changed, summaryErr := ensureResponsesReasoningSummary(responsesBody); summaryErr != nil {
+		return nil, fmt.Errorf("ensure Responses reasoning summary: %w", summaryErr)
+	} else if changed {
+		responsesBody = normalizedBody
+	}
 
 	// 5. Get access token
 	token, _, err := s.GetAccessToken(ctx, account)

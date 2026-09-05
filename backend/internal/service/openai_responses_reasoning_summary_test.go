@@ -75,6 +75,7 @@ func TestEnsureResponsesReasoningSummary_DoesNotAddToNonReasoningItems(t *testin
 type strictResponsesSummaryUpstream struct {
 	httpUpstreamRecorder
 	missingSummary bool
+	forceStream    bool
 }
 
 func (u *strictResponsesSummaryUpstream) Do(req *http.Request, proxyURL string, accountID int64, accountConcurrency int) (*http.Response, error) {
@@ -91,8 +92,8 @@ func (u *strictResponsesSummaryUpstream) DoWithTLS(req *http.Request, proxyURL s
 }
 
 func (u *strictResponsesSummaryUpstream) successResponse() *http.Response {
-	if strings.Contains(u.lastReq.Header.Get("Accept"), "text/event-stream") || gjson.GetBytes(u.lastBody, "stream").Bool() {
-		body := "data: {\"type\":\"response.completed\",\"response\":{\"id\":\"resp_summary\",\"object\":\"response\",\"model\":\"muse-spark-1.3-contributor\",\"status\":\"completed\",\"output\":[{\"type\":\"message\",\"role\":\"assistant\",\"content\":[{\"type\":\"output_text\",\"text\":\"ok\"}]}],\"usage\":{\"input_tokens\":1,\"output_tokens\":1,\"total_tokens\":2}}}\n\ndata: [DONE]\n\n"
+	if u.forceStream || strings.Contains(u.lastReq.Header.Get("Accept"), "text/event-stream") || gjson.GetBytes(u.lastBody, "stream").Bool() {
+		body := "data: {\"type\":\"response.created\",\"response\":{\"id\":\"resp_summary\",\"object\":\"response\",\"model\":\"muse-spark-1.3-contributor\",\"status\":\"in_progress\",\"output\":[]}}\n\ndata: {\"type\":\"response.completed\",\"response\":{\"id\":\"resp_summary\",\"object\":\"response\",\"model\":\"muse-spark-1.3-contributor\",\"status\":\"completed\",\"output\":[{\"type\":\"message\",\"role\":\"assistant\",\"content\":[{\"type\":\"output_text\",\"text\":\"ok\"}]}],\"usage\":{\"input_tokens\":1,\"output_tokens\":1,\"total_tokens\":2}}}\n\ndata: [DONE]\n\n"
 		return &http.Response{StatusCode: http.StatusOK, Header: http.Header{"Content-Type": []string{"text/event-stream"}}, Body: io.NopCloser(strings.NewReader(body))}
 	}
 	return newJSONResponse(http.StatusOK, `{"id":"resp_summary","object":"response","model":"muse-spark-1.3-contributor","status":"completed","output":[{"type":"message","role":"assistant","content":[{"type":"output_text","text":"ok"}]}],"usage":{"input_tokens":1,"output_tokens":1,"total_tokens":2}}`)
@@ -182,4 +183,62 @@ func TestForward_APIKeyResponsesFallbackIncludesMissingReasoningSummary(t *testi
 	require.False(t, upstream.missingSummary)
 	require.Equal(t, "[]", gjson.GetBytes(upstream.lastBody, "input.0.summary").Raw)
 	require.Equal(t, http.StatusOK, rec.Code)
+}
+
+func TestForwardAsChatCompletions_ResponsesShapeAddsReasoningSummary(t *testing.T) {
+	tests := []struct {
+		name    string
+		account *Account
+	}{
+		{
+			name: "api key",
+			account: &Account{
+				ID:          57,
+				Name:        "muse-api-key",
+				Platform:    PlatformOpenAI,
+				Type:        AccountTypeAPIKey,
+				Concurrency: 1,
+				Credentials: map[string]any{"api_key": "sk-test"},
+				Extra:       map[string]any{openai_compat.ExtraKeyResponsesSupported: true},
+			},
+		},
+		{
+			name: "oauth",
+			account: &Account{
+				ID:          58,
+				Name:        "muse-oauth",
+				Platform:    PlatformOpenAI,
+				Type:        AccountTypeOAuth,
+				Concurrency: 1,
+				Credentials: map[string]any{
+					"access_token":       "oauth-token",
+					"chatgpt_account_id": "chatgpt-acc",
+				},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gin.SetMode(gin.TestMode)
+			rec := httptest.NewRecorder()
+			body := []byte(`{"model":"muse-spark-1.3-contributor","stream":false,"input":[{"type":"reasoning","encrypted_content":"enc"},{"type":"message","role":"user","content":[{"type":"input_text","text":"continue"}]}]}`)
+			c, _ := gin.CreateTestContext(rec)
+			c.Request = httptest.NewRequest(http.MethodPost, "/v1/chat/completions", bytes.NewReader(body))
+			c.Request.Header.Set("Content-Type", "application/json")
+
+			upstream := &strictResponsesSummaryUpstream{forceStream: true}
+			svc := &OpenAIGatewayService{
+				cfg:          &config.Config{Security: config.SecurityConfig{URLAllowlist: config.URLAllowlistConfig{Enabled: false}}},
+				httpUpstream: upstream,
+			}
+
+			result, err := svc.ForwardAsChatCompletions(context.Background(), c, tt.account, body, "", "")
+			require.NoError(t, err)
+			require.NotNil(t, result)
+			require.False(t, upstream.missingSummary)
+			require.Equal(t, "[]", gjson.GetBytes(upstream.lastBody, "input.0.summary").Raw)
+			require.Equal(t, http.StatusOK, rec.Code)
+		})
+	}
 }
