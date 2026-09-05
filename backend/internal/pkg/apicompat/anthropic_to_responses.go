@@ -479,34 +479,67 @@ func isReasoningModel(model string) bool {
 }
 
 // normalizeToolParameters ensures the tool parameter schema is valid for
-// OpenAI's Responses API, which requires "properties" on object schemas.
-//
-//   - nil/empty → {"type":"object","properties":{}}
-//   - type=object without properties → adds "properties": {}
-//   - otherwise → returned unchanged
+// OpenAI's Responses API. Object schemas must use an object-valued
+// properties field and an array-valued required field whose names exist in
+// properties. The same rules are applied to nested schemas.
 func normalizeToolParameters(schema json.RawMessage) json.RawMessage {
 	if len(schema) == 0 || string(schema) == "null" || string(schema) == "[]" {
 		return json.RawMessage(`{"type":"object","properties":{}}`)
 	}
 
-	var m map[string]json.RawMessage
-	if err := json.Unmarshal(schema, &m); err != nil {
+	var value any
+	if err := json.Unmarshal(schema, &value); err != nil {
 		return schema
 	}
 
-	typ := m["type"]
-	if string(typ) != `"object"` {
-		return schema
-	}
-
-	if _, ok := m["properties"]; ok {
-		return schema
-	}
-
-	m["properties"] = json.RawMessage(`{}`)
-	out, err := json.Marshal(m)
+	normalized := normalizeToolSchemaValue(value)
+	out, err := json.Marshal(normalized)
 	if err != nil {
 		return schema
 	}
 	return out
+}
+
+func normalizeToolSchemaValue(value any) any {
+	switch current := value.(type) {
+	case []any:
+		for i := range current {
+			current[i] = normalizeToolSchemaValue(current[i])
+		}
+		return current
+	case map[string]any:
+		for key, child := range current {
+			current[key] = normalizeToolSchemaValue(child)
+		}
+
+		if typ, ok := current["type"].(string); ok && typ == "object" {
+			properties, ok := current["properties"].(map[string]any)
+			if !ok || properties == nil {
+				properties = map[string]any{}
+				current["properties"] = properties
+			}
+
+			if required, exists := current["required"]; exists {
+				values, ok := required.([]any)
+				if !ok {
+					current["required"] = []any{}
+					values = []any{}
+				}
+
+				filtered := make([]any, 0, len(values))
+				for _, item := range values {
+					name, ok := item.(string)
+					if ok {
+						if _, exists := properties[name]; exists {
+							filtered = append(filtered, name)
+						}
+					}
+				}
+				current["required"] = filtered
+			}
+		}
+		return current
+	default:
+		return value
+	}
 }

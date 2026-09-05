@@ -1666,6 +1666,21 @@ func TestNormalizeToolParameters(t *testing.T) {
 			expected: `{"type":"object","properties":{"city":{"type":"string"}}}`,
 		},
 		{
+			name:     "object with null properties and required",
+			input:    json.RawMessage(`{"type":"object","properties":null,"required":null}`),
+			expected: `{"type":"object","properties":{},"required":[]}`,
+		},
+		{
+			name:     "filters invalid required fields",
+			input:    json.RawMessage(`{"type":"object","properties":{"city":{"type":"string"}},"required":["city","missing",null]}`),
+			expected: `{"type":"object","properties":{"city":{"type":"string"}},"required":["city"]}`,
+		},
+		{
+			name:     "normalizes nested object schema",
+			input:    json.RawMessage(`{"type":"object","properties":{"filter":{"type":"object","properties":null,"required":null}}}`),
+			expected: `{"type":"object","properties":{"filter":{"type":"object","properties":{},"required":[]}}}`,
+		},
+		{
 			name:     "non-object type",
 			input:    json.RawMessage(`{"type":"string"}`),
 			expected: `{"type":"string"}`,
@@ -1673,7 +1688,7 @@ func TestNormalizeToolParameters(t *testing.T) {
 		{
 			name:     "object with additional fields preserved",
 			input:    json.RawMessage(`{"type":"object","required":["name"]}`),
-			expected: `{"type":"object","required":["name"],"properties":{}}`,
+			expected: `{"type":"object","required":[],"properties":{}}`,
 		},
 		{
 			name:     "invalid JSON passthrough",
