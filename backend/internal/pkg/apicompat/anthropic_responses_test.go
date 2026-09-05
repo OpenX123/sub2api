@@ -193,8 +193,105 @@ func TestAnthropicToResponses_ThinkingSignatureBecomesReasoning(t *testing.T) {
 	require.GreaterOrEqual(t, len(items), 4)
 	assert.Equal(t, "reasoning", items[1].Type)
 	assert.Equal(t, "enc-rs-1", items[1].EncryptedContent)
+	require.Len(t, items[1].Summary, 1)
+	assert.Equal(t, "summary_text", items[1].Summary[0].Type)
+	assert.Equal(t, "plan", items[1].Summary[0].Text)
 	assert.Equal(t, "assistant", items[2].Role)
 	assert.Equal(t, "function_call", items[3].Type)
+}
+
+func TestAnthropicToResponses_MultipleThinkingTurnsPreserveReasoningToolOrder(t *testing.T) {
+	req := &AnthropicRequest{
+		Model: "grok-4.5",
+		Messages: []AnthropicMessage{
+			{Role: "user", Content: json.RawMessage(`"first"`)},
+			{Role: "assistant", Content: json.RawMessage(`[{"type":"thinking","thinking":"plan tool","signature":"enc-1"},{"type":"text","text":"calling"},{"type":"tool_use","id":"toolu_1","name":"lookup","input":{"q":"one"}}]`)},
+			{Role: "user", Content: json.RawMessage(`[{"type":"tool_result","tool_use_id":"toolu_1","content":"result"}]`)},
+			{Role: "assistant", Content: json.RawMessage(`[{"type":"thinking","thinking":"finalize","signature":"enc-2"},{"type":"text","text":"finished"}]`)},
+		},
+	}
+
+	resp, err := AnthropicToResponses(req)
+	require.NoError(t, err)
+	var items []ResponsesInputItem
+	require.NoError(t, json.Unmarshal(resp.Input, &items))
+	require.Len(t, items, 7)
+
+	assert.Equal(t, "message", items[0].Type)
+	assert.Equal(t, "reasoning", items[1].Type)
+	assert.Equal(t, "enc-1", items[1].EncryptedContent)
+	assert.Equal(t, "plan tool", items[1].Summary[0].Text)
+	assert.Equal(t, "message", items[2].Type)
+	assert.Equal(t, "function_call", items[3].Type)
+	assert.Equal(t, "toolu_1", items[3].CallID)
+	assert.Equal(t, "function_call_output", items[4].Type)
+	assert.Equal(t, "toolu_1", items[4].CallID)
+	assert.Equal(t, "reasoning", items[5].Type)
+	assert.Equal(t, "enc-2", items[5].EncryptedContent)
+	assert.Equal(t, "finalize", items[5].Summary[0].Text)
+	assert.Equal(t, "message", items[6].Type)
+}
+
+func TestAnthropicToResponses_ThinkingSignatureOnlyIncludesEmptySummary(t *testing.T) {
+	req := &AnthropicRequest{
+		Model: "grok-4.5",
+		Messages: []AnthropicMessage{
+			{Role: "user", Content: json.RawMessage(`"Hello"`)},
+			{Role: "assistant", Content: json.RawMessage(`[{"type":"thinking","thinking":"","signature":"enc-only"}]`)},
+		},
+	}
+
+	resp, err := AnthropicToResponses(req)
+	require.NoError(t, err)
+	var items []ResponsesInputItem
+	require.NoError(t, json.Unmarshal(resp.Input, &items))
+	require.Len(t, items, 2)
+	require.Equal(t, "reasoning", items[1].Type)
+	assert.Empty(t, items[1].Summary)
+
+	var wire []map[string]any
+	require.NoError(t, json.Unmarshal(resp.Input, &wire))
+	assert.Contains(t, wire[1], "summary")
+	assert.Equal(t, []any{}, wire[1]["summary"])
+}
+
+func TestResponsesInputItem_ReasoningMarshalAlwaysIncludesSummary(t *testing.T) {
+	data, err := json.Marshal(ResponsesInputItem{
+		Type:             "reasoning",
+		EncryptedContent: "enc",
+	})
+	require.NoError(t, err)
+	assert.JSONEq(t, `{"type":"reasoning","encrypted_content":"enc","summary":[]}`, string(data))
+}
+
+func TestResponsesInputItem_ReasoningMarshalPreservesExplicitEmptySummary(t *testing.T) {
+	data, err := json.Marshal(ResponsesInputItem{
+		Type:             "reasoning",
+		EncryptedContent: "enc",
+		Summary:          []ResponsesSummary{},
+	})
+	require.NoError(t, err)
+	assert.JSONEq(t, `{"type":"reasoning","encrypted_content":"enc","summary":[]}`, string(data))
+}
+
+func TestResponsesInputItem_ReasoningMarshalPreservesExistingSummary(t *testing.T) {
+	data, err := json.Marshal(ResponsesInputItem{
+		Type:             "reasoning",
+		EncryptedContent: "enc",
+		Summary:          []ResponsesSummary{{Type: "summary_text", Text: "keep"}},
+	})
+	require.NoError(t, err)
+	assert.JSONEq(t, `{"type":"reasoning","encrypted_content":"enc","summary":[{"type":"summary_text","text":"keep"}]}`, string(data))
+}
+
+func TestResponsesInputItem_NonReasoningMarshalDoesNotIncludeSummary(t *testing.T) {
+	data, err := json.Marshal(ResponsesInputItem{
+		Type:    "message",
+		Role:    "assistant",
+		Summary: []ResponsesSummary{{Type: "summary_text", Text: "must not leak"}},
+	})
+	require.NoError(t, err)
+	assert.NotContains(t, string(data), `"summary"`)
 }
 
 func TestAnthropicToResponses_MaxTokensFloor(t *testing.T) {
