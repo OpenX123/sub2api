@@ -650,7 +650,7 @@ func normalizeAnthropicInputSchema(schema json.RawMessage) json.RawMessage {
 	const emptyObjectSchema = `{"type":"object","properties":{}}`
 
 	trimmed := strings.TrimSpace(string(schema))
-	if trimmed == "" || trimmed == "null" {
+	if trimmed == "" || trimmed == "null" || trimmed == "[]" {
 		return json.RawMessage(emptyObjectSchema)
 	}
 

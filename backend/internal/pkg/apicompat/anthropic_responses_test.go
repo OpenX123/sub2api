@@ -247,12 +247,14 @@ func TestAnthropicToResponses_ThinkingSignatureOnlyIncludesEmptySummary(t *testi
 	require.NoError(t, json.Unmarshal(resp.Input, &items))
 	require.Len(t, items, 2)
 	require.Equal(t, "reasoning", items[1].Type)
-	assert.Empty(t, items[1].Summary)
+	require.Len(t, items[1].Summary, 1)
+	assert.Equal(t, "summary_text", items[1].Summary[0].Type)
+	assert.Empty(t, items[1].Summary[0].Text)
 
 	var wire []map[string]any
 	require.NoError(t, json.Unmarshal(resp.Input, &wire))
 	assert.Contains(t, wire[1], "summary")
-	assert.Equal(t, []any{}, wire[1]["summary"])
+	assert.Equal(t, []any{map[string]any{"type": "summary_text", "text": ""}}, wire[1]["summary"])
 }
 
 func TestResponsesInputItem_ReasoningMarshalAlwaysIncludesSummary(t *testing.T) {
@@ -1646,6 +1648,11 @@ func TestNormalizeToolParameters(t *testing.T) {
 		{
 			name:     "null input",
 			input:    json.RawMessage(`null`),
+			expected: `{"type":"object","properties":{}}`,
+		},
+		{
+			name:     "array input",
+			input:    json.RawMessage(`[]`),
 			expected: `{"type":"object","properties":{}}`,
 		},
 		{

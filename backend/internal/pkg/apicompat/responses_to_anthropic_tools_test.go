@@ -138,3 +138,14 @@ func TestResponsesToAnthropic_DefaultToolNormalizesInputSchema(t *testing.T) {
 	assert.Equal(t, "shell", tools[0].Name)
 	assert.JSONEq(t, `{"type":"object","properties":{}}`, string(tools[0].InputSchema))
 }
+
+func TestResponsesToAnthropic_ArrayToolSchemaNormalizesToObject(t *testing.T) {
+	tools := convertResponsesToAnthropicTools([]ResponsesTool{{
+		Type:       "function",
+		Name:       "empty_args",
+		Parameters: json.RawMessage(`[]`),
+	}})
+
+	require.Len(t, tools, 1)
+	assert.JSONEq(t, `{"type":"object","properties":{}}`, string(tools[0].InputSchema))
+}

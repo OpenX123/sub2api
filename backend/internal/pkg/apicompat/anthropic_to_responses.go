@@ -295,7 +295,7 @@ func anthropicAssistantToResponses(raw json.RawMessage) ([]ResponsesInputItem, e
 		item := ResponsesInputItem{
 			Type:             "reasoning",
 			EncryptedContent: sig,
-			Summary:          []ResponsesSummary{},
+			Summary:          []ResponsesSummary{{Type: "summary_text", Text: ""}},
 		}
 		if strings.TrimSpace(b.Thinking) != "" {
 			item.Summary = []ResponsesSummary{{Type: "summary_text", Text: b.Thinking}}
@@ -485,7 +485,7 @@ func isReasoningModel(model string) bool {
 //   - type=object without properties → adds "properties": {}
 //   - otherwise → returned unchanged
 func normalizeToolParameters(schema json.RawMessage) json.RawMessage {
-	if len(schema) == 0 || string(schema) == "null" {
+	if len(schema) == 0 || string(schema) == "null" || string(schema) == "[]" {
 		return json.RawMessage(`{"type":"object","properties":{}}`)
 	}
 
