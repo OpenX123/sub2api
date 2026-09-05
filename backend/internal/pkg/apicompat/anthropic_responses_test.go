@@ -200,6 +200,38 @@ func TestAnthropicToResponses_ThinkingSignatureBecomesReasoning(t *testing.T) {
 	assert.Equal(t, "function_call", items[3].Type)
 }
 
+func TestAnthropicToResponses_MultipleThinkingTurnsPreserveReasoningToolOrder(t *testing.T) {
+	req := &AnthropicRequest{
+		Model: "grok-4.5",
+		Messages: []AnthropicMessage{
+			{Role: "user", Content: json.RawMessage(`"first"`)},
+			{Role: "assistant", Content: json.RawMessage(`[{"type":"thinking","thinking":"plan tool","signature":"enc-1"},{"type":"text","text":"calling"},{"type":"tool_use","id":"toolu_1","name":"lookup","input":{"q":"one"}}]`)},
+			{Role: "user", Content: json.RawMessage(`[{"type":"tool_result","tool_use_id":"toolu_1","content":"result"}]`)},
+			{Role: "assistant", Content: json.RawMessage(`[{"type":"thinking","thinking":"finalize","signature":"enc-2"},{"type":"text","text":"finished"}]`)},
+		},
+	}
+
+	resp, err := AnthropicToResponses(req)
+	require.NoError(t, err)
+	var items []ResponsesInputItem
+	require.NoError(t, json.Unmarshal(resp.Input, &items))
+	require.Len(t, items, 7)
+
+	assert.Equal(t, "message", items[0].Type)
+	assert.Equal(t, "reasoning", items[1].Type)
+	assert.Equal(t, "enc-1", items[1].EncryptedContent)
+	assert.Equal(t, "plan tool", items[1].Summary[0].Text)
+	assert.Equal(t, "message", items[2].Type)
+	assert.Equal(t, "function_call", items[3].Type)
+	assert.Equal(t, "toolu_1", items[3].CallID)
+	assert.Equal(t, "function_call_output", items[4].Type)
+	assert.Equal(t, "toolu_1", items[4].CallID)
+	assert.Equal(t, "reasoning", items[5].Type)
+	assert.Equal(t, "enc-2", items[5].EncryptedContent)
+	assert.Equal(t, "finalize", items[5].Summary[0].Text)
+	assert.Equal(t, "message", items[6].Type)
+}
+
 func TestAnthropicToResponses_ThinkingSignatureOnlyIncludesEmptySummary(t *testing.T) {
 	req := &AnthropicRequest{
 		Model: "grok-4.5",

@@ -154,6 +154,43 @@ func TestForwardAsAnthropic_APIKeyResponsesIncludesReasoningSummary(t *testing.T
 	require.Equal(t, http.StatusOK, rec.Code)
 }
 
+func TestForwardAsAnthropic_OAuthResponsesIncludesReasoningSummary(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	rec := httptest.NewRecorder()
+	body := []byte(`{"model":"claude-opus-5","max_tokens":16,"messages":[
+		{"role":"user","content":"continue"},
+		{"role":"assistant","content":[{"type":"thinking","thinking":"plan","signature":"enc-signature"},{"type":"text","text":"done"}]}
+	],"stream":false}`)
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/messages", bytes.NewReader(body))
+	c.Request.Header.Set("Content-Type", "application/json")
+
+	upstream := &strictResponsesSummaryUpstream{forceStream: true}
+	svc := &OpenAIGatewayService{
+		cfg:          &config.Config{Security: config.SecurityConfig{URLAllowlist: config.URLAllowlistConfig{Enabled: false}}},
+		httpUpstream: upstream,
+	}
+	account := &Account{
+		ID:          58,
+		Name:        "muse-oauth",
+		Platform:    PlatformOpenAI,
+		Type:        AccountTypeOAuth,
+		Concurrency: 1,
+		Credentials: map[string]any{
+			"access_token":       "oauth-token",
+			"chatgpt_account_id": "chatgpt-acc",
+		},
+	}
+
+	result, err := svc.ForwardAsAnthropic(context.Background(), c, account, body, "", "muse-spark-1.3-contributor")
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.False(t, upstream.missingSummary)
+	require.Equal(t, "summary_text", gjson.GetBytes(upstream.lastBody, "input.1.summary.0.type").String())
+	require.Equal(t, "plan", gjson.GetBytes(upstream.lastBody, "input.1.summary.0.text").String())
+	require.Equal(t, http.StatusOK, rec.Code)
+}
+
 func TestForward_APIKeyResponsesFallbackIncludesMissingReasoningSummary(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	rec := httptest.NewRecorder()
