@@ -66,16 +66,16 @@ func ensureResponsesReasoningSummary(body []byte) ([]byte, bool, error) {
 	if !changed {
 		return body, false, nil
 	}
-	var rebuilt bytes.Buffer
-	rebuilt.WriteByte('[')
+	rebuilt := make([]byte, 0, len(input.Raw)+len(items)*2)
+	rebuilt = append(rebuilt, '[')
 	for index, item := range items {
 		if index > 0 {
-			rebuilt.WriteByte(',')
+			rebuilt = append(rebuilt, ',')
 		}
-		rebuilt.Write(item)
+		rebuilt = append(rebuilt, item...)
 	}
-	rebuilt.WriteByte(']')
-	out, err := sjson.SetRawBytes(body, "input", rebuilt.Bytes())
+	rebuilt = append(rebuilt, ']')
+	out, err := sjson.SetRawBytes(body, "input", rebuilt)
 	if err != nil {
 		return body, false, fmt.Errorf("replace input array: %w", err)
 	}
