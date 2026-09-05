@@ -292,10 +292,15 @@ func anthropicAssistantToResponses(raw json.RawMessage) ([]ResponsesInputItem, e
 		if sig == "" || strings.HasPrefix(sig, "gAAAA") {
 			continue
 		}
-		items = append(items, ResponsesInputItem{
+		item := ResponsesInputItem{
 			Type:             "reasoning",
 			EncryptedContent: sig,
-		})
+			Summary:          []ResponsesSummary{},
+		}
+		if strings.TrimSpace(b.Thinking) != "" {
+			item.Summary = []ResponsesSummary{{Type: "summary_text", Text: b.Thinking}}
+		}
+		items = append(items, item)
 	}
 
 	// Text content → assistant message with output_text content parts.

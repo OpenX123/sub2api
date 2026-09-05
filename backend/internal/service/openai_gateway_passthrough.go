@@ -286,6 +286,11 @@ func (s *OpenAIGatewayService) forwardOpenAIPassthrough(
 			}
 		}
 	}
+	if normalizedBody, changed, summaryErr := ensureResponsesReasoningSummary(body); summaryErr != nil {
+		return nil, fmt.Errorf("ensure Responses reasoning summary: %w", summaryErr)
+	} else if changed {
+		body = normalizedBody
+	}
 
 	// Get access token
 	token, _, err := s.GetAccessToken(ctx, account)

@@ -294,6 +294,11 @@ func (s *OpenAIGatewayService) ForwardAsAnthropic(
 			return nil, fmt.Errorf("apply grok Free function-tool cache route: %w", patchErr)
 		}
 	}
+	if normalizedBody, changed, summaryErr := ensureResponsesReasoningSummary(responsesBody); summaryErr != nil {
+		return nil, fmt.Errorf("ensure Responses reasoning summary: %w", summaryErr)
+	} else if changed {
+		responsesBody = normalizedBody
+	}
 
 	// 5. Get access token
 	token, _, err := s.getRequestCredential(ctx, c, account)

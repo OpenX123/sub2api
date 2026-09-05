@@ -7,6 +7,7 @@ package apicompat
 import (
 	"bytes"
 	"encoding/json"
+	"strings"
 )
 
 // ---------------------------------------------------------------------------
@@ -254,7 +255,8 @@ type ResponsesInputItem struct {
 	Content json.RawMessage `json:"content,omitempty"` // string or []ResponsesContentPart
 
 	// type=reasoning (multi-turn replay of encrypted reasoning)
-	EncryptedContent string `json:"encrypted_content,omitempty"`
+	EncryptedContent string             `json:"encrypted_content,omitempty"`
+	Summary          []ResponsesSummary `json:"summary,omitempty"`
 
 	// type=function_call
 	CallID    string `json:"call_id,omitempty"`
@@ -265,6 +267,32 @@ type ResponsesInputItem struct {
 	// type=function_call_output
 	Output    string `json:"output,omitempty"`
 	outputRaw json.RawMessage
+}
+
+// MarshalJSON keeps Responses reasoning input items protocol-compliant. The
+// Responses API requires every type=reasoning item to include summary, even
+// when no visible summary text is available. A custom wire shape is used here
+// because omitempty would otherwise remove an intentionally empty array.
+func (i ResponsesInputItem) MarshalJSON() ([]byte, error) {
+	type responsesInputItemAlias ResponsesInputItem
+	if strings.TrimSpace(i.Type) != "reasoning" {
+		// Summary is meaningful only for reasoning items. Do not leak it onto
+		// message/function-call items if a caller reused a struct value.
+		i.Summary = nil
+		return json.Marshal(responsesInputItemAlias(i))
+	}
+
+	summary := i.Summary
+	if summary == nil {
+		summary = []ResponsesSummary{}
+	}
+	return json.Marshal(struct {
+		responsesInputItemAlias
+		Summary []ResponsesSummary `json:"summary"`
+	}{
+		responsesInputItemAlias: responsesInputItemAlias(i),
+		Summary:                 summary,
+	})
 }
 
 func (i *ResponsesInputItem) UnmarshalJSON(data []byte) error {

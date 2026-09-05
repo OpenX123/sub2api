@@ -88,6 +88,11 @@ func (s *OpenAIGatewayService) forwardGrokResponses(
 	if err != nil {
 		return nil, fmt.Errorf("apply grok Free function-tool cache route: %w", err)
 	}
+	if normalizedBody, changed, summaryErr := ensureResponsesReasoningSummary(patchedBody); summaryErr != nil {
+		return nil, fmt.Errorf("ensure Responses reasoning summary: %w", summaryErr)
+	} else if changed {
+		patchedBody = normalizedBody
+	}
 
 	token, _, err := s.getRequestCredential(ctx, c, account)
 	if err != nil {

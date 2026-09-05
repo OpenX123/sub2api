@@ -188,7 +188,30 @@ func sanitizeEncryptedReasoningInputItem(item any) (next any, changed bool, keep
 	if len(inputItem) == 1 {
 		return nil, true, false
 	}
+	// ensureResponsesReasoningSummary adds the protocol-required empty summary
+	// before the first attempt. Once encrypted_content is rejected and removed,
+	// a type + summary:[] pair is still an unusable bare reasoning skeleton and
+	// must be dropped just like the historical type-only shape. Keep summaries
+	// with visible text (and items carrying other context such as an id).
+	if len(inputItem) == 2 {
+		if summary, ok := inputItem["summary"]; ok && isEmptyResponsesReasoningSummary(summary) {
+			return nil, true, false
+		}
+	}
 	return inputItem, true, true
+}
+
+func isEmptyResponsesReasoningSummary(value any) bool {
+	switch summary := value.(type) {
+	case nil:
+		return true
+	case []any:
+		return len(summary) == 0
+	case []map[string]any:
+		return len(summary) == 0
+	default:
+		return false
+	}
 }
 
 // SanitizeOpenAICrossModeFailoverReasoning derives a failover attempt body from

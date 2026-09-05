@@ -193,8 +193,63 @@ func TestAnthropicToResponses_ThinkingSignatureBecomesReasoning(t *testing.T) {
 	require.GreaterOrEqual(t, len(items), 4)
 	assert.Equal(t, "reasoning", items[1].Type)
 	assert.Equal(t, "enc-rs-1", items[1].EncryptedContent)
+	require.Len(t, items[1].Summary, 1)
+	assert.Equal(t, "summary_text", items[1].Summary[0].Type)
+	assert.Equal(t, "plan", items[1].Summary[0].Text)
 	assert.Equal(t, "assistant", items[2].Role)
 	assert.Equal(t, "function_call", items[3].Type)
+}
+
+func TestAnthropicToResponses_ThinkingSignatureOnlyIncludesEmptySummary(t *testing.T) {
+	req := &AnthropicRequest{
+		Model: "grok-4.5",
+		Messages: []AnthropicMessage{
+			{Role: "user", Content: json.RawMessage(`"Hello"`)},
+			{Role: "assistant", Content: json.RawMessage(`[{"type":"thinking","thinking":"","signature":"enc-only"}]`)},
+		},
+	}
+
+	resp, err := AnthropicToResponses(req)
+	require.NoError(t, err)
+	var items []ResponsesInputItem
+	require.NoError(t, json.Unmarshal(resp.Input, &items))
+	require.Len(t, items, 2)
+	require.Equal(t, "reasoning", items[1].Type)
+	assert.Empty(t, items[1].Summary)
+
+	var wire []map[string]any
+	require.NoError(t, json.Unmarshal(resp.Input, &wire))
+	assert.Contains(t, wire[1], "summary")
+	assert.Equal(t, []any{}, wire[1]["summary"])
+}
+
+func TestResponsesInputItem_ReasoningMarshalAlwaysIncludesSummary(t *testing.T) {
+	data, err := json.Marshal(ResponsesInputItem{
+		Type:             "reasoning",
+		EncryptedContent: "enc",
+	})
+	require.NoError(t, err)
+	assert.JSONEq(t, `{"type":"reasoning","encrypted_content":"enc","summary":[]}`, string(data))
+}
+
+func TestResponsesInputItem_ReasoningMarshalPreservesExistingSummary(t *testing.T) {
+	data, err := json.Marshal(ResponsesInputItem{
+		Type:             "reasoning",
+		EncryptedContent: "enc",
+		Summary:          []ResponsesSummary{{Type: "summary_text", Text: "keep"}},
+	})
+	require.NoError(t, err)
+	assert.JSONEq(t, `{"type":"reasoning","encrypted_content":"enc","summary":[{"type":"summary_text","text":"keep"}]}`, string(data))
+}
+
+func TestResponsesInputItem_NonReasoningMarshalDoesNotIncludeSummary(t *testing.T) {
+	data, err := json.Marshal(ResponsesInputItem{
+		Type:    "message",
+		Role:    "assistant",
+		Summary: []ResponsesSummary{{Type: "summary_text", Text: "must not leak"}},
+	})
+	require.NoError(t, err)
+	assert.NotContains(t, string(data), `"summary"`)
 }
 
 func TestAnthropicToResponses_MaxTokensFloor(t *testing.T) {

@@ -99,6 +99,11 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 			return nil, err
 		}
 	}
+	if normalizedBody, changed, summaryErr := ensureResponsesReasoningSummary(body); summaryErr != nil {
+		return nil, fmt.Errorf("ensure Responses reasoning summary: %w", summaryErr)
+	} else if changed {
+		body = normalizedBody
+	}
 
 	originalBody := body
 	requestView := newOpenAIRequestView(body)
@@ -561,6 +566,14 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 			}
 			requestView = newOpenAIRequestView(body)
 		}
+	}
+	if normalizedBody, changed, summaryErr := ensureResponsesReasoningSummary(body); summaryErr != nil {
+		return nil, fmt.Errorf("ensure Responses reasoning summary: %w", summaryErr)
+	} else if changed {
+		body = normalizedBody
+		requestView = newOpenAIRequestView(body)
+		reqBody = nil
+		bodyModified = false
 	}
 	imageBillingModel := ""
 	imageSizeTier := ""
