@@ -232,6 +232,16 @@ func TestResponsesInputItem_ReasoningMarshalAlwaysIncludesSummary(t *testing.T) 
 	assert.JSONEq(t, `{"type":"reasoning","encrypted_content":"enc","summary":[]}`, string(data))
 }
 
+func TestResponsesInputItem_ReasoningMarshalPreservesExplicitEmptySummary(t *testing.T) {
+	data, err := json.Marshal(ResponsesInputItem{
+		Type:             "reasoning",
+		EncryptedContent: "enc",
+		Summary:          []ResponsesSummary{},
+	})
+	require.NoError(t, err)
+	assert.JSONEq(t, `{"type":"reasoning","encrypted_content":"enc","summary":[]}`, string(data))
+}
+
 func TestResponsesInputItem_ReasoningMarshalPreservesExistingSummary(t *testing.T) {
 	data, err := json.Marshal(ResponsesInputItem{
 		Type:             "reasoning",
