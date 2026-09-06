@@ -45,7 +45,7 @@ jobs:
       - name: Build backend
         working-directory: backend
         run: |
-          go build -tags embed -trimpath \
+          CGO_ENABLED=0 go build -tags embed -trimpath \
             -ldflags="-s -w -X main.Commit=${{ github.sha }} -X main.BuildType=release" \
             -o ../sub2api ./cmd/server
 
