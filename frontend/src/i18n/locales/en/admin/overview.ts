@@ -997,6 +997,7 @@ export default {
       limitDay: 'd',
       limitWeek: 'w',
       limitMonth: 'mo',
+      limit5h: '5h',
       groupCreated: 'Group created successfully',
       groupUpdated: 'Group updated successfully',
       groupDeleted: 'Group deleted successfully',
@@ -1061,6 +1062,8 @@ export default {
         dailyLimit: 'Daily Limit (USD)',
         weeklyLimit: 'Weekly Limit (USD)',
         monthlyLimit: 'Monthly Limit (USD)',
+        fiveHourLimit: '5-Hour Limit (USD)',
+        fiveHourLimitHint: 'Per subscription. The window starts on first use and resets after 5 hours. Leave empty for unlimited; 0 blocks usage',
         defaultValidityDays: 'Default Validity (Days)',
         validityHint: 'Number of days the subscription is valid when assigned to a user',
         noLimit: 'No limit'

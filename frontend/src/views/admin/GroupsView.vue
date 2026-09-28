@@ -192,7 +192,8 @@
                   v-if="
                     row.daily_limit_usd ||
                     row.weekly_limit_usd ||
-                    row.monthly_limit_usd
+                    row.monthly_limit_usd ||
+                    row.rate_limit_5h != null
                   "
                   class="flex flex-wrap items-center gap-x-1 gap-y-0.5"
                 >
@@ -241,6 +242,21 @@
                   <span v-if="row.monthly_limit_usd" class="whitespace-nowrap"
                     >{{ formatUsd(row.monthly_limit_usd) }}/{{
                       t("admin.groups.limitMonth")
+                    }}</span
+                  >
+                  <span
+                    v-if="row.rate_limit_5h != null"
+                    class="whitespace-nowrap"
+                    ><span
+                      v-if="
+                        row.daily_limit_usd ||
+                        row.weekly_limit_usd ||
+                        row.monthly_limit_usd
+                      "
+                      class="mx-1 text-gray-300 dark:text-gray-600"
+                      >·</span
+                    >{{ formatUsd(row.rate_limit_5h) }}/{{
+                      t("admin.groups.limit5h")
                     }}</span
                   >
                 </div>
@@ -726,6 +742,22 @@
             v-if="createForm.subscription_type === 'subscription'"
             class="space-y-4 border-l-2 border-primary-200 pl-4 dark:border-primary-800"
           >
+            <div>
+              <label class="input-label">{{
+                t("admin.groups.subscription.fiveHourLimit")
+              }}</label>
+              <input
+                v-model.number="createForm.rate_limit_5h"
+                type="number"
+                step="0.01"
+                min="0"
+                class="input"
+                :placeholder="t('admin.groups.subscription.noLimit')"
+              />
+              <p class="input-hint">
+                {{ t("admin.groups.subscription.fiveHourLimitHint") }}
+              </p>
+            </div>
             <div>
               <label class="input-label">{{
                 t("admin.groups.subscription.dailyLimit")
@@ -2366,6 +2398,22 @@
             v-if="editForm.subscription_type === 'subscription'"
             class="space-y-4 border-l-2 border-primary-200 pl-4 dark:border-primary-800"
           >
+            <div>
+              <label class="input-label">{{
+                t("admin.groups.subscription.fiveHourLimit")
+              }}</label>
+              <input
+                v-model.number="editForm.rate_limit_5h"
+                type="number"
+                step="0.01"
+                min="0"
+                class="input"
+                :placeholder="t('admin.groups.subscription.noLimit')"
+              />
+              <p class="input-hint">
+                {{ t("admin.groups.subscription.fiveHourLimitHint") }}
+              </p>
+            </div>
             <div>
               <label class="input-label">{{
                 t("admin.groups.subscription.dailyLimit")
@@ -4947,6 +4995,7 @@ const createForm = reactive({
   daily_limit_usd: null as number | null,
   weekly_limit_usd: null as number | null,
   monthly_limit_usd: null as number | null,
+  rate_limit_5h: null as number | null,
   long_context_pricing_enabled: true,
   force_openai_fast: false,
   free_openai_fast: false,
@@ -5312,6 +5361,7 @@ const editForm = reactive({
   daily_limit_usd: null as number | null,
   weekly_limit_usd: null as number | null,
   monthly_limit_usd: null as number | null,
+  rate_limit_5h: null as number | null,
   long_context_pricing_enabled: true,
   force_openai_fast: false,
   free_openai_fast: false,
@@ -5774,6 +5824,7 @@ const closeCreateModal = () => {
   createForm.daily_limit_usd = null;
   createForm.weekly_limit_usd = null;
   createForm.monthly_limit_usd = null;
+  createForm.rate_limit_5h = null;
   createForm.allow_image_generation = false;
   createForm.allow_batch_image_generation = false;
   createForm.image_rate_independent = false;
@@ -5841,6 +5892,17 @@ const normalizeOptionalLimit = (
   }
 
   return Number.isFinite(value) && value > 0 ? value : null;
+};
+
+// 5h 限额与日/周/月不同：0 是有效值（禁止使用），只有空值/负数/非法值才表示不限。
+const normalizeFiveHourLimit = (
+  value: number | string | null | undefined,
+): number | null => {
+  if (value === null || value === undefined) {
+    return null;
+  }
+  const parsed = typeof value === "string" ? Number(value.trim() || NaN) : value;
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
 };
 
 const normalizeRateMultiplier = (
@@ -5933,6 +5995,9 @@ const handleCreateGroup = async () => {
       ),
       monthly_limit_usd: normalizeOptionalLimit(
         createForm.monthly_limit_usd as number | string | null,
+      ),
+      rate_limit_5h: normalizeFiveHourLimit(
+        createForm.rate_limit_5h as number | string | null,
       ),
       ...(Object.keys(videoModelPrices).length > 0
         ? { video_model_prices: videoModelPrices }
@@ -6056,6 +6121,7 @@ const handleEdit = async (group: AdminGroup) => {
   editForm.daily_limit_usd = group.daily_limit_usd;
   editForm.weekly_limit_usd = group.weekly_limit_usd;
   editForm.monthly_limit_usd = group.monthly_limit_usd;
+  editForm.rate_limit_5h = group.rate_limit_5h ?? null;
   editForm.long_context_pricing_enabled =
     group.long_context_pricing_enabled ?? true;
   editForm.force_openai_fast = group.force_openai_fast ?? false;
@@ -6269,6 +6335,9 @@ const handleUpdateGroup = async () => {
       ),
       monthly_limit_usd: normalizeOptionalLimit(
         editForm.monthly_limit_usd as number | string | null,
+      ),
+      rate_limit_5h: normalizeFiveHourLimit(
+        editForm.rate_limit_5h as number | string | null,
       ),
       video_model_prices: serializeVideoModelPrices(
         editForm.video_model_prices,

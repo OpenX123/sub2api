@@ -31,3 +31,16 @@ func TestUpdateGroupRequestLimitFieldsTriState(t *testing.T) {
 		require.Equal(t, 42.5, *req.MonthlyLimitUSD.ToServiceInput())
 	})
 }
+
+func TestGroupRequestsAcceptFiveHourLimit(t *testing.T) {
+	var create CreateGroupRequest
+	require.NoError(t, json.Unmarshal([]byte(`{"name":"carpool","rate_limit_5h":0}`), &create))
+	require.Equal(t, 0.0, *create.RateLimit5h.ToServiceInput(), "0 表示禁止使用")
+
+	var update UpdateGroupRequest
+	require.NoError(t, json.Unmarshal([]byte(`{}`), &update))
+	require.Nil(t, update.RateLimit5h.ToServiceInput(), "未提交时保持原值")
+
+	require.NoError(t, json.Unmarshal([]byte(`{"rate_limit_5h":null}`), &update))
+	require.Negative(t, *update.RateLimit5h.ToServiceInput(), "null 表示不限")
+}

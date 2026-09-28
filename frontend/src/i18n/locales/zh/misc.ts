@@ -2,6 +2,7 @@ export default {
 
   // Subscription Progress (Header component)
   subscriptionProgress: {
+    fiveHour: '5h',
     title: '我的订阅',
     viewDetails: '查看订阅详情',
     activeCount: '{count} 个有效订阅',
@@ -129,6 +130,8 @@ export default {
     daily: '每日',
     weekly: '每周',
     monthly: '每月',
+    fiveHour: '5 小时',
+    fiveHourWindowHint: '首次使用后开始计时，5 小时后重置',
     daysRemaining: '剩余 {days} 天',
     expiresOn: '{date} 到期',
     resetIn: '{time} 后重置',

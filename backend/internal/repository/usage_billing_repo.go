@@ -219,6 +219,9 @@ func incrementUsageBillingSubscription(ctx context.Context, tx *sql.Tx, subscrip
 			daily_usage_usd = us.daily_usage_usd + $1,
 			weekly_usage_usd = us.weekly_usage_usd + $1,
 			monthly_usage_usd = us.monthly_usage_usd + $1,
+			-- 5h 窗口按 Claude 语义滚动：窗口为空或已满 5h 时以本次费用开启新窗口。
+			usage_5h = CASE WHEN us.window_5h_start IS NULL OR us.window_5h_start + INTERVAL '5 hours' <= NOW() THEN $1 ELSE us.usage_5h + $1 END,
+			window_5h_start = CASE WHEN us.window_5h_start IS NULL OR us.window_5h_start + INTERVAL '5 hours' <= NOW() THEN NOW() ELSE us.window_5h_start END,
 			updated_at = NOW()
 		FROM groups g
 		WHERE us.id = $2

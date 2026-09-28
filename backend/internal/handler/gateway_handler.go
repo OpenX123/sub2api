@@ -2475,6 +2475,14 @@ func billingErrorDetails(err error) (status int, code, message string, retryAfte
 		msg := pkgerrors.Message(err)
 		return http.StatusTooManyRequests, "rate_limit_exceeded", msg, extractQuotaResetSeconds(err)
 	}
+	if service.IsSubscriptionUsageLimitError(err) {
+		// 订阅 5h/日/周/月窗口超限同为暂时性限额：429 + Retry-After，并在消息里带上重置时间供用户查看。
+		msg := pkgerrors.Message(err)
+		if resetAt, ok := service.WindowResetsAt(err); ok {
+			msg = fmt.Sprintf("%s, resets at %s", msg, resetAt.Format(time.RFC3339))
+		}
+		return http.StatusTooManyRequests, "rate_limit_exceeded", msg, extractQuotaResetSeconds(err)
+	}
 	msg := pkgerrors.Message(err)
 	if msg == "" {
 		logger.L().With(

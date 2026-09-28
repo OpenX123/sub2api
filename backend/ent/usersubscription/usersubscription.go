@@ -43,6 +43,10 @@ const (
 	FieldWeeklyUsageUsd = "weekly_usage_usd"
 	// FieldMonthlyUsageUsd holds the string denoting the monthly_usage_usd field in the database.
 	FieldMonthlyUsageUsd = "monthly_usage_usd"
+	// FieldUsage5h holds the string denoting the usage_5h field in the database.
+	FieldUsage5h = "usage_5h"
+	// FieldWindow5hStart holds the string denoting the window_5h_start field in the database.
+	FieldWindow5hStart = "window_5h_start"
 	// FieldAssignedBy holds the string denoting the assigned_by field in the database.
 	FieldAssignedBy = "assigned_by"
 	// FieldAssignedAt holds the string denoting the assigned_at field in the database.
@@ -106,6 +110,8 @@ var Columns = []string{
 	FieldDailyUsageUsd,
 	FieldWeeklyUsageUsd,
 	FieldMonthlyUsageUsd,
+	FieldUsage5h,
+	FieldWindow5hStart,
 	FieldAssignedBy,
 	FieldAssignedAt,
 	FieldNotes,
@@ -145,6 +151,8 @@ var (
 	DefaultWeeklyUsageUsd float64
 	// DefaultMonthlyUsageUsd holds the default value on creation for the "monthly_usage_usd" field.
 	DefaultMonthlyUsageUsd float64
+	// DefaultUsage5h holds the default value on creation for the "usage_5h" field.
+	DefaultUsage5h float64
 	// DefaultAssignedAt holds the default value on creation for the "assigned_at" field.
 	DefaultAssignedAt func() time.Time
 )
@@ -225,6 +233,16 @@ func ByWeeklyUsageUsd(opts ...sql.OrderTermOption) OrderOption {
 // ByMonthlyUsageUsd orders the results by the monthly_usage_usd field.
 func ByMonthlyUsageUsd(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldMonthlyUsageUsd, opts...).ToFunc()
+}
+
+// ByUsage5h orders the results by the usage_5h field.
+func ByUsage5h(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldUsage5h, opts...).ToFunc()
+}
+
+// ByWindow5hStart orders the results by the window_5h_start field.
+func ByWindow5hStart(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldWindow5hStart, opts...).ToFunc()
 }
 
 // ByAssignedBy orders the results by the assigned_by field.

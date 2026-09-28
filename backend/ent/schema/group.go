@@ -94,6 +94,11 @@ func (Group) Fields() []ent.Field {
 			Optional().
 			Nillable().
 			SchemaType(map[string]string{dialect.Postgres: "decimal(20,8)"}),
+		field.Float("rate_limit_5h").
+			Optional().
+			Nillable().
+			SchemaType(map[string]string{dialect.Postgres: "decimal(20,8)"}).
+			Comment("订阅分组每个订阅的 5h 窗口 USD 限额：NULL 不限，0 禁止使用，>0 为上限"),
 		field.Int("default_validity_days").
 			Default(30),
 

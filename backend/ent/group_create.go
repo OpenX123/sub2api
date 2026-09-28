@@ -274,6 +274,20 @@ func (_c *GroupCreate) SetNillableMonthlyLimitUsd(v *float64) *GroupCreate {
 	return _c
 }
 
+// SetRateLimit5h sets the "rate_limit_5h" field.
+func (_c *GroupCreate) SetRateLimit5h(v float64) *GroupCreate {
+	_c.mutation.SetRateLimit5h(v)
+	return _c
+}
+
+// SetNillableRateLimit5h sets the "rate_limit_5h" field if the given value is not nil.
+func (_c *GroupCreate) SetNillableRateLimit5h(v *float64) *GroupCreate {
+	if v != nil {
+		_c.SetRateLimit5h(*v)
+	}
+	return _c
+}
+
 // SetDefaultValidityDays sets the "default_validity_days" field.
 func (_c *GroupCreate) SetDefaultValidityDays(v int) *GroupCreate {
 	_c.mutation.SetDefaultValidityDays(v)
@@ -1517,6 +1531,10 @@ func (_c *GroupCreate) createSpec() (*Group, *sqlgraph.CreateSpec) {
 		_spec.SetField(group.FieldMonthlyLimitUsd, field.TypeFloat64, value)
 		_node.MonthlyLimitUsd = &value
 	}
+	if value, ok := _c.mutation.RateLimit5h(); ok {
+		_spec.SetField(group.FieldRateLimit5h, field.TypeFloat64, value)
+		_node.RateLimit5h = &value
+	}
 	if value, ok := _c.mutation.DefaultValidityDays(); ok {
 		_spec.SetField(group.FieldDefaultValidityDays, field.TypeInt, value)
 		_node.DefaultValidityDays = value
@@ -2114,6 +2132,30 @@ func (u *GroupUpsert) AddMonthlyLimitUsd(v float64) *GroupUpsert {
 // ClearMonthlyLimitUsd clears the value of the "monthly_limit_usd" field.
 func (u *GroupUpsert) ClearMonthlyLimitUsd() *GroupUpsert {
 	u.SetNull(group.FieldMonthlyLimitUsd)
+	return u
+}
+
+// SetRateLimit5h sets the "rate_limit_5h" field.
+func (u *GroupUpsert) SetRateLimit5h(v float64) *GroupUpsert {
+	u.Set(group.FieldRateLimit5h, v)
+	return u
+}
+
+// UpdateRateLimit5h sets the "rate_limit_5h" field to the value that was provided on create.
+func (u *GroupUpsert) UpdateRateLimit5h() *GroupUpsert {
+	u.SetExcluded(group.FieldRateLimit5h)
+	return u
+}
+
+// AddRateLimit5h adds v to the "rate_limit_5h" field.
+func (u *GroupUpsert) AddRateLimit5h(v float64) *GroupUpsert {
+	u.Add(group.FieldRateLimit5h, v)
+	return u
+}
+
+// ClearRateLimit5h clears the value of the "rate_limit_5h" field.
+func (u *GroupUpsert) ClearRateLimit5h() *GroupUpsert {
+	u.SetNull(group.FieldRateLimit5h)
 	return u
 }
 
@@ -3260,6 +3302,34 @@ func (u *GroupUpsertOne) UpdateMonthlyLimitUsd() *GroupUpsertOne {
 func (u *GroupUpsertOne) ClearMonthlyLimitUsd() *GroupUpsertOne {
 	return u.Update(func(s *GroupUpsert) {
 		s.ClearMonthlyLimitUsd()
+	})
+}
+
+// SetRateLimit5h sets the "rate_limit_5h" field.
+func (u *GroupUpsertOne) SetRateLimit5h(v float64) *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.SetRateLimit5h(v)
+	})
+}
+
+// AddRateLimit5h adds v to the "rate_limit_5h" field.
+func (u *GroupUpsertOne) AddRateLimit5h(v float64) *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.AddRateLimit5h(v)
+	})
+}
+
+// UpdateRateLimit5h sets the "rate_limit_5h" field to the value that was provided on create.
+func (u *GroupUpsertOne) UpdateRateLimit5h() *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.UpdateRateLimit5h()
+	})
+}
+
+// ClearRateLimit5h clears the value of the "rate_limit_5h" field.
+func (u *GroupUpsertOne) ClearRateLimit5h() *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.ClearRateLimit5h()
 	})
 }
 
@@ -4706,6 +4776,34 @@ func (u *GroupUpsertBulk) UpdateMonthlyLimitUsd() *GroupUpsertBulk {
 func (u *GroupUpsertBulk) ClearMonthlyLimitUsd() *GroupUpsertBulk {
 	return u.Update(func(s *GroupUpsert) {
 		s.ClearMonthlyLimitUsd()
+	})
+}
+
+// SetRateLimit5h sets the "rate_limit_5h" field.
+func (u *GroupUpsertBulk) SetRateLimit5h(v float64) *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.SetRateLimit5h(v)
+	})
+}
+
+// AddRateLimit5h adds v to the "rate_limit_5h" field.
+func (u *GroupUpsertBulk) AddRateLimit5h(v float64) *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.AddRateLimit5h(v)
+	})
+}
+
+// UpdateRateLimit5h sets the "rate_limit_5h" field to the value that was provided on create.
+func (u *GroupUpsertBulk) UpdateRateLimit5h() *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.UpdateRateLimit5h()
+	})
+}
+
+// ClearRateLimit5h clears the value of the "rate_limit_5h" field.
+func (u *GroupUpsertBulk) ClearRateLimit5h() *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.ClearRateLimit5h()
 	})
 }
 

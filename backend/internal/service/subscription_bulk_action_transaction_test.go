@@ -67,7 +67,7 @@ func (r *transactionalBulkSubscriptionRepo) UpdateStatus(ctx context.Context, _ 
 	return nil
 }
 
-func (r *transactionalBulkSubscriptionRepo) ResetUsageWindows(ctx context.Context, _ int64, daily, weekly, monthly bool, dailyStart, periodicStart time.Time) error {
+func (r *transactionalBulkSubscriptionRepo) ResetUsageWindows(ctx context.Context, _ int64, daily, weekly, monthly, _ bool, dailyStart, periodicStart time.Time) error {
 	sub := r.pending[dbent.TxFromContext(ctx)]
 	if daily {
 		sub.DailyUsageUSD, sub.DailyWindowStart = 0, &dailyStart

@@ -72,6 +72,22 @@
 
               <!-- Progress bars for limited subscriptions -->
               <template v-else>
+                <div v-if="subscription.group?.rate_limit_5h != null" class="flex items-center gap-2">
+                  <span class="w-8 flex-shrink-0 text-[10px] text-gray-500">{{
+                    t('subscriptionProgress.fiveHour')
+                  }}</span>
+                  <div class="h-1.5 min-w-0 flex-1 rounded-full bg-gray-200 dark:bg-dark-600">
+                    <div
+                      class="h-1.5 rounded-full transition-all"
+                      :class="getPercentageBarClass(getFiveHourPercentage(subscription))"
+                      :style="{ width: `${Math.min(getFiveHourPercentage(subscription), 100)}%` }"
+                    ></div>
+                  </div>
+                  <span class="w-24 flex-shrink-0 text-right text-[10px] text-gray-500">
+                    {{ formatUsage(subscription.usage_5h_usd, subscription.group?.rate_limit_5h) }}
+                  </span>
+                </div>
+
                 <div v-if="subscription.group?.daily_limit_usd" class="flex items-center gap-2">
                   <span class="w-8 flex-shrink-0 text-[10px] text-gray-500">{{
                     t('subscriptionProgress.daily')
@@ -219,6 +235,9 @@ function getMaxUsagePercentage(sub: UserSubscription): number {
   if (sub.group?.monthly_limit_usd) {
     percentages.push(((sub.monthly_usage_usd || 0) / sub.group.monthly_limit_usd) * 100)
   }
+  if (sub.group?.rate_limit_5h != null) {
+    percentages.push(getFiveHourPercentage(sub))
+  }
   return percentages.length > 0 ? Math.max(...percentages) : 0
 }
 
@@ -226,8 +245,23 @@ function isUnlimited(sub: UserSubscription): boolean {
   return (
     !sub.group?.daily_limit_usd &&
     !sub.group?.weekly_limit_usd &&
-    !sub.group?.monthly_limit_usd
+    !sub.group?.monthly_limit_usd &&
+    sub.group?.rate_limit_5h == null
   )
+}
+
+// 5h 限额为 0 表示禁止使用，按已用满展示。
+function getFiveHourPercentage(sub: UserSubscription): number {
+  const limit = sub.group?.rate_limit_5h
+  if (limit == null) return 0
+  if (limit <= 0) return 100
+  return ((sub.usage_5h_usd || 0) / limit) * 100
+}
+
+function getPercentageBarClass(percentage: number): string {
+  if (percentage >= 90) return 'bg-red-500'
+  if (percentage >= 70) return 'bg-orange-500'
+  return 'bg-green-500'
 }
 
 function getProgressDotClass(sub: UserSubscription): string {

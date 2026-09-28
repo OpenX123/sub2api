@@ -48,6 +48,8 @@ export function prepareBulkSubscriptionOperation(input: SubscriptionBulkActionRe
     request.daily = !!input.daily
     request.weekly = !!input.weekly
     request.monthly = !!input.monthly
+    // five_hour 只在勾选时发送，保持未勾选时的请求与旧版本一致（幂等指纹不变）。
+    if (input.five_hour) request.five_hour = true
   }
   const adminId = currentAdminId()
   const storageKey = adminId ? `sub2api:admin:subscription-bulk:${adminId}:${JSON.stringify(request)}` : null

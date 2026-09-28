@@ -576,6 +576,7 @@ export interface Group {
   daily_limit_usd: number | null
   weekly_limit_usd: number | null
   monthly_limit_usd: number | null
+  rate_limit_5h?: number | null // 每个订阅 5h 窗口限额：null 不限，0 禁止使用
   long_context_pricing_enabled: boolean
   // 图片生成计费配置
   allow_image_generation: boolean
@@ -796,6 +797,7 @@ export interface CreateGroupRequest {
   daily_limit_usd?: number | null
   weekly_limit_usd?: number | null
   monthly_limit_usd?: number | null
+  rate_limit_5h?: number | null
   long_context_pricing_enabled?: boolean
   force_openai_fast?: boolean
   free_openai_fast?: boolean
@@ -862,6 +864,7 @@ export interface UpdateGroupRequest {
   daily_limit_usd?: number | null
   weekly_limit_usd?: number | null
   monthly_limit_usd?: number | null
+  rate_limit_5h?: number | null
   long_context_pricing_enabled?: boolean
   force_openai_fast?: boolean
   free_openai_fast?: boolean
@@ -2105,6 +2108,8 @@ export interface UserSubscription {
   daily_window_start: string | null
   weekly_window_start: string | null
   monthly_window_start: string | null
+  window_5h_start?: string | null // 仅当前进行中的 5h 窗口；过期为 null
+  usage_5h_usd?: number
   created_at: string
   updated_at: string
   revoked_at?: string | null

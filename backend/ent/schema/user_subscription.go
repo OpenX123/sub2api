@@ -68,6 +68,15 @@ func (UserSubscription) Fields() []ent.Field {
 		field.Float("monthly_usage_usd").
 			SchemaType(map[string]string{dialect.Postgres: "decimal(20,10)"}).
 			Default(0),
+		field.Float("usage_5h").
+			SchemaType(map[string]string{dialect.Postgres: "decimal(20,10)"}).
+			Default(0).
+			Comment("当前 5h 窗口已用 USD；窗口过期后下一次计费从本次费用重新累计"),
+		field.Time("window_5h_start").
+			Optional().
+			Nillable().
+			SchemaType(map[string]string{dialect.Postgres: "timestamptz"}).
+			Comment("当前 5h 窗口起点：窗口为空或已过期时，下一次计费写入当时的时间"),
 
 		field.Int64("assigned_by").
 			Optional().

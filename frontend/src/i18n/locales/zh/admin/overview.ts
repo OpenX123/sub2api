@@ -1016,6 +1016,7 @@ export default {
       limitDay: '日',
       limitWeek: '周',
       limitMonth: '月',
+      limit5h: '5h',
       groupCreated: '分组创建成功',
       groupUpdated: '分组更新成功',
       groupDeleted: '分组删除成功',
@@ -1058,6 +1059,8 @@ export default {
         dailyLimit: '每日限额（USD）',
         weeklyLimit: '每周限额（USD）',
         monthlyLimit: '每月限额（USD）',
+        fiveHourLimit: '5 小时限额（USD）',
+        fiveHourLimitHint: '每个订阅独立计算，首次使用开始计时，满 5 小时后重置；留空不限，填 0 禁止使用',
         defaultValidityDays: '默认有效期（天）',
         validityHint: '分配给用户时订阅的有效天数',
         noLimit: '无限制'

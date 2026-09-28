@@ -247,6 +247,50 @@
 
           <template #cell-usage="{ row }">
             <div class="min-w-[280px] space-y-2">
+              <!-- 5h Window Usage（0 表示禁止使用，因此按 != null 判断） -->
+              <div v-if="row.group?.rate_limit_5h != null" class="usage-row">
+                <div class="flex items-center gap-2">
+                  <span class="usage-label">{{ t('admin.subscriptions.five_hour') }}</span>
+                  <div class="h-1.5 flex-1 rounded-full bg-gray-200 dark:bg-dark-600">
+                    <div
+                      class="h-1.5 rounded-full transition-all"
+                      :class="
+                        row.group.rate_limit_5h === 0
+                          ? 'bg-red-500'
+                          : getProgressClass(row.usage_5h_usd ?? 0, row.group.rate_limit_5h)
+                      "
+                      :style="{
+                        width:
+                          row.group.rate_limit_5h === 0
+                            ? '100%'
+                            : getProgressWidth(row.usage_5h_usd ?? 0, row.group.rate_limit_5h)
+                      }"
+                    ></div>
+                  </div>
+                  <span class="usage-amount">
+                    ${{ row.usage_5h_usd?.toFixed(2) || '0.00' }}
+                    <span class="text-gray-400">/</span>
+                    ${{ row.group.rate_limit_5h.toFixed(2) }}
+                  </span>
+                </div>
+                <div class="reset-info" v-if="row.window_5h_start">
+                  <svg
+                    class="h-3 w-3"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    stroke-width="2"
+                  >
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+                    />
+                  </svg>
+                  <span>{{ formatResetTime(row.window_5h_start, 'five_hour') }}</span>
+                </div>
+              </div>
+
               <!-- Daily Usage -->
               <div v-if="row.group?.daily_limit_usd" class="usage-row">
                 <div class="flex items-center gap-2">
@@ -363,7 +407,8 @@
                 v-if="
                   !row.group?.daily_limit_usd &&
                   !row.group?.weekly_limit_usd &&
-                  !row.group?.monthly_limit_usd
+                  !row.group?.monthly_limit_usd &&
+                  row.group?.rate_limit_5h == null
                 "
                 class="flex items-center gap-2 rounded-lg bg-gradient-to-r from-emerald-50 to-teal-50 px-3 py-2 dark:from-emerald-900/20 dark:to-teal-900/20"
               >
@@ -1479,7 +1524,7 @@ const confirmResetQuota = async () => {
   if (resettingQuota.value) return
   resettingQuota.value = true
   try {
-    await adminAPI.subscriptions.resetQuota(resettingSubscription.value.id, { daily: true, weekly: true, monthly: true })
+    await adminAPI.subscriptions.resetQuota(resettingSubscription.value.id, { daily: true, weekly: true, monthly: true, five_hour: true })
     appStore.showSuccess(t('admin.subscriptions.quotaResetSuccess'))
     showResetQuotaConfirm.value = false
     resettingSubscription.value = null
@@ -1571,7 +1616,10 @@ const formatDailyUsageWindow = (subscription: UserSubscription): string => {
 }
 
 // Format reset time based on window start and period type
-const formatResetTime = (windowStart: string | null, period: 'daily' | 'weekly' | 'monthly'): string => {
+const formatResetTime = (
+  windowStart: string | null,
+  period: 'five_hour' | 'daily' | 'weekly' | 'monthly'
+): string => {
   if (!windowStart) return t('admin.subscriptions.windowNotActive')
 
   const start = new Date(windowStart)
@@ -1580,6 +1628,9 @@ const formatResetTime = (windowStart: string | null, period: 'daily' | 'weekly' 
   // Calculate reset time based on period
   let resetTime: Date
   switch (period) {
+    case 'five_hour':
+      resetTime = new Date(start.getTime() + 5 * 60 * 60 * 1000)
+      break
     case 'daily':
       resetTime = new Date(start.getTime() + 24 * 60 * 60 * 1000)
       break

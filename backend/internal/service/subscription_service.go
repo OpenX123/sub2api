@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"math/rand/v2"
@@ -34,13 +35,23 @@ var (
 	ErrSubscriptionNotRevoked      = infraerrors.Conflict("SUBSCRIPTION_NOT_REVOKED", "subscription is not revoked")
 	ErrSubscriptionRestoreConflict = infraerrors.Conflict("SUBSCRIPTION_RESTORE_CONFLICT", "subscription already exists for this user and group")
 	ErrGroupNotSubscriptionType    = infraerrors.BadRequest("GROUP_NOT_SUBSCRIPTION_TYPE", "group is not a subscription type")
-	ErrInvalidInput                = infraerrors.BadRequest("INVALID_INPUT", "at least one of resetDaily, resetWeekly, or resetMonthly must be true")
+	ErrInvalidInput                = infraerrors.BadRequest("INVALID_INPUT", "at least one of resetDaily, resetWeekly, resetMonthly, or resetFiveHour must be true")
 	ErrDailyLimitExceeded          = infraerrors.TooManyRequests("DAILY_LIMIT_EXCEEDED", "daily usage limit exceeded")
 	ErrWeeklyLimitExceeded         = infraerrors.TooManyRequests("WEEKLY_LIMIT_EXCEEDED", "weekly usage limit exceeded")
 	ErrMonthlyLimitExceeded        = infraerrors.TooManyRequests("MONTHLY_LIMIT_EXCEEDED", "monthly usage limit exceeded")
+	ErrFiveHourLimitExceeded       = infraerrors.TooManyRequests("FIVE_HOUR_LIMIT_EXCEEDED", "5-hour usage limit exceeded")
 	ErrSubscriptionNilInput        = infraerrors.BadRequest("SUBSCRIPTION_NIL_INPUT", "subscription input cannot be nil")
 	ErrAdjustWouldExpire           = infraerrors.BadRequest("ADJUST_WOULD_EXPIRE", "adjustment would result in expired subscription (remaining days must be > 0)")
 )
+
+// IsSubscriptionUsageLimitError 报告错误是否为订阅用量窗口（5h/日/周/月）超限。
+// 这类错误是暂时性的，窗口重置后可恢复，对外统一返回 429 + Retry-After。
+func IsSubscriptionUsageLimitError(err error) bool {
+	return errors.Is(err, ErrFiveHourLimitExceeded) ||
+		errors.Is(err, ErrDailyLimitExceeded) ||
+		errors.Is(err, ErrWeeklyLimitExceeded) ||
+		errors.Is(err, ErrMonthlyLimitExceeded)
+}
 
 // SubscriptionService 订阅服务
 type SubscriptionService struct {
@@ -883,9 +894,9 @@ func (s *SubscriptionService) checkAndActivateWindowAt(ctx context.Context, sub 
 	return s.userSubRepo.ActivateWindows(ctx, sub.ID, timezone.StartOfDay(now), now)
 }
 
-// AdminResetQuota manually resets the daily, weekly, and/or monthly usage windows.
-func (s *SubscriptionService) AdminResetQuota(ctx context.Context, subscriptionID int64, resetDaily, resetWeekly, resetMonthly bool) (*UserSubscription, error) {
-	if !resetDaily && !resetWeekly && !resetMonthly {
+// AdminResetQuota manually resets the daily, weekly, monthly, and/or 5h usage windows.
+func (s *SubscriptionService) AdminResetQuota(ctx context.Context, subscriptionID int64, resetDaily, resetWeekly, resetMonthly, resetFiveHour bool) (*UserSubscription, error) {
+	if !resetDaily && !resetWeekly && !resetMonthly && !resetFiveHour {
 		return nil, ErrInvalidInput
 	}
 	sub, err := s.userSubRepo.GetByID(ctx, subscriptionID)
@@ -895,7 +906,7 @@ func (s *SubscriptionService) AdminResetQuota(ctx context.Context, subscriptionI
 	now := s.now()
 	// 日窗口锚点取当天 0 点：手动重置只清空用量，不改变“每天 0 点刷新”的节奏。
 	// 周/月窗口保持锚定重置时刻（期限对齐滚动窗口语义）。
-	if err := s.userSubRepo.ResetUsageWindows(ctx, sub.ID, resetDaily, resetWeekly, resetMonthly, timezone.StartOfDay(now), now); err != nil {
+	if err := s.userSubRepo.ResetUsageWindows(ctx, sub.ID, resetDaily, resetWeekly, resetMonthly, resetFiveHour, timezone.StartOfDay(now), now); err != nil {
 		return nil, err
 	}
 	// Invalidate L1 ristretto cache. Ristretto's Del() is asynchronous by design,
@@ -1034,14 +1045,18 @@ func (s *SubscriptionService) ValidateAndCheckLimits(sub *UserSubscription, grou
 	}
 
 	// 3. 检查用量限额
+	// 超限错误附带窗口重置时间，供上层返回 Retry-After。
 	if !sub.CheckDailyLimit(group, 0) {
-		return needsMaintenance, ErrDailyLimitExceeded
+		return needsMaintenance, withOptionalWindowResetsMetadata(ErrDailyLimitExceeded, sub.DailyResetTime())
 	}
 	if !sub.CheckWeeklyLimit(group, 0) {
-		return needsMaintenance, ErrWeeklyLimitExceeded
+		return needsMaintenance, withOptionalWindowResetsMetadata(ErrWeeklyLimitExceeded, sub.WeeklyResetTime())
 	}
 	if !sub.CheckMonthlyLimit(group, 0) {
-		return needsMaintenance, ErrMonthlyLimitExceeded
+		return needsMaintenance, withOptionalWindowResetsMetadata(ErrMonthlyLimitExceeded, sub.MonthlyResetTime())
+	}
+	if sub.FiveHourLimitReachedAt(group, now) {
+		return needsMaintenance, withOptionalWindowResetsMetadata(ErrFiveHourLimitExceeded, sub.FiveHourResetTimeAt(now))
 	}
 
 	return needsMaintenance, nil

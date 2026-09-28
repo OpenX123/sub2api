@@ -55,7 +55,7 @@ func (r *bulkActionSubscriptionRepo) ExtendExpiry(_ context.Context, id int64, e
 	return nil
 }
 
-func (r *bulkActionSubscriptionRepo) ResetUsageWindows(_ context.Context, id int64, daily, weekly, monthly bool, dailyStart, periodicStart time.Time) error {
+func (r *bulkActionSubscriptionRepo) ResetUsageWindows(_ context.Context, id int64, daily, weekly, monthly, _ bool, dailyStart, periodicStart time.Time) error {
 	sub := r.subscriptions[id]
 	if daily {
 		sub.DailyUsageUSD, sub.DailyWindowStart = 0, &dailyStart

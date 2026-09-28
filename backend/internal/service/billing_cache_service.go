@@ -40,12 +40,19 @@ var (
 
 // subscriptionCacheData 订阅缓存数据结构（内部使用）
 type subscriptionCacheData struct {
-	Status       string
-	ExpiresAt    time.Time
-	DailyUsage   float64
-	WeeklyUsage  float64
-	MonthlyUsage float64
-	Version      int64
+	Status        string
+	ExpiresAt     time.Time
+	DailyUsage    float64
+	WeeklyUsage   float64
+	MonthlyUsage  float64
+	Usage5h       float64
+	Window5hStart *time.Time
+	Version       int64
+}
+
+// fiveHourWindow 把缓存中的 5h 窗口还原为订阅视图，复用 UserSubscription 的窗口语义。
+func (d *subscriptionCacheData) fiveHourWindow() *UserSubscription {
+	return &UserSubscription{Usage5hUSD: d.Usage5h, Window5hStart: d.Window5hStart}
 }
 
 // 缓存写入任务类型
@@ -442,23 +449,27 @@ func (s *BillingCacheService) GetSubscriptionStatus(ctx context.Context, userID,
 
 func (s *BillingCacheService) convertFromPortsData(data *SubscriptionCacheData) *subscriptionCacheData {
 	return &subscriptionCacheData{
-		Status:       data.Status,
-		ExpiresAt:    data.ExpiresAt,
-		DailyUsage:   data.DailyUsage,
-		WeeklyUsage:  data.WeeklyUsage,
-		MonthlyUsage: data.MonthlyUsage,
-		Version:      data.Version,
+		Status:        data.Status,
+		ExpiresAt:     data.ExpiresAt,
+		DailyUsage:    data.DailyUsage,
+		WeeklyUsage:   data.WeeklyUsage,
+		MonthlyUsage:  data.MonthlyUsage,
+		Usage5h:       data.Usage5h,
+		Window5hStart: data.Window5hStart,
+		Version:       data.Version,
 	}
 }
 
 func (s *BillingCacheService) convertToPortsData(data *subscriptionCacheData) *SubscriptionCacheData {
 	return &SubscriptionCacheData{
-		Status:       data.Status,
-		ExpiresAt:    data.ExpiresAt,
-		DailyUsage:   data.DailyUsage,
-		WeeklyUsage:  data.WeeklyUsage,
-		MonthlyUsage: data.MonthlyUsage,
-		Version:      data.Version,
+		Status:        data.Status,
+		ExpiresAt:     data.ExpiresAt,
+		DailyUsage:    data.DailyUsage,
+		WeeklyUsage:   data.WeeklyUsage,
+		MonthlyUsage:  data.MonthlyUsage,
+		Usage5h:       data.Usage5h,
+		Window5hStart: data.Window5hStart,
+		Version:       data.Version,
 	}
 }
 
@@ -470,12 +481,14 @@ func (s *BillingCacheService) getSubscriptionFromDB(ctx context.Context, userID,
 	}
 
 	return &subscriptionCacheData{
-		Status:       sub.Status,
-		ExpiresAt:    sub.ExpiresAt,
-		DailyUsage:   sub.DailyUsageUSD,
-		WeeklyUsage:  sub.WeeklyUsageUSD,
-		MonthlyUsage: sub.MonthlyUsageUSD,
-		Version:      sub.UpdatedAt.Unix(),
+		Status:        sub.Status,
+		ExpiresAt:     sub.ExpiresAt,
+		DailyUsage:    sub.DailyUsageUSD,
+		WeeklyUsage:   sub.WeeklyUsageUSD,
+		MonthlyUsage:  sub.MonthlyUsageUSD,
+		Usage5h:       sub.Usage5hUSD,
+		Window5hStart: sub.Window5hStart,
+		Version:       sub.UpdatedAt.Unix(),
 	}, nil
 }
 
@@ -954,17 +967,23 @@ func (s *BillingCacheService) checkSubscriptionEligibility(ctx context.Context, 
 		return ErrSubscriptionInvalid
 	}
 
-	// 检查限额（使用传入的Group限额配置）
+	// 检查限额（使用传入的Group限额配置）。超限错误附带窗口重置时间，供上层返回 Retry-After；
+	// 日/周/月窗口起点取自请求上下文中的订阅快照。
 	if group.HasDailyLimit() && subData.DailyUsage >= *group.DailyLimitUSD {
-		return ErrDailyLimitExceeded
+		return withOptionalWindowResetsMetadata(ErrDailyLimitExceeded, subscription.DailyResetTime())
 	}
 
 	if group.HasWeeklyLimit() && subData.WeeklyUsage >= *group.WeeklyLimitUSD {
-		return ErrWeeklyLimitExceeded
+		return withOptionalWindowResetsMetadata(ErrWeeklyLimitExceeded, subscription.WeeklyResetTime())
 	}
 
 	if group.HasMonthlyLimit() && subData.MonthlyUsage >= *group.MonthlyLimitUSD {
-		return ErrMonthlyLimitExceeded
+		return withOptionalWindowResetsMetadata(ErrMonthlyLimitExceeded, subscription.MonthlyResetTime())
+	}
+
+	now := time.Now()
+	if window := subData.fiveHourWindow(); window.FiveHourLimitReachedAt(group, now) {
+		return withOptionalWindowResetsMetadata(ErrFiveHourLimitExceeded, window.FiveHourResetTimeAt(now))
 	}
 
 	return nil
@@ -1343,6 +1362,31 @@ func withWindowResetsMetadata(err error, resetAt time.Time) error {
 	return appErr.WithMetadata(map[string]string{
 		"window_resets_at": resetAt.Format(time.RFC3339),
 	})
+}
+
+// WindowResetsAt 读取限额错误附带的窗口重置时间（window_resets_at）。
+func WindowResetsAt(err error) (time.Time, bool) {
+	appErr := infraerrors.FromError(err)
+	if appErr == nil {
+		return time.Time{}, false
+	}
+	raw := appErr.Metadata["window_resets_at"]
+	if raw == "" {
+		return time.Time{}, false
+	}
+	resetAt, parseErr := time.Parse(time.RFC3339, raw)
+	if parseErr != nil {
+		return time.Time{}, false
+	}
+	return resetAt, true
+}
+
+// withOptionalWindowResetsMetadata 在重置时间已知时附加 window_resets_at，未知时原样返回错误。
+func withOptionalWindowResetsMetadata(err error, resetAt *time.Time) error {
+	if resetAt == nil {
+		return err
+	}
+	return withWindowResetsMetadata(err, *resetAt)
 }
 
 // nextDailyReset 计算下一个日窗口起点（次日全局时区 0 点）。

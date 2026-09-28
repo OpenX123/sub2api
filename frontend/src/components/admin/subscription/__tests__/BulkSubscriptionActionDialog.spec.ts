@@ -103,6 +103,18 @@ describe('BulkSubscriptionActionDialog', () => {
     }, expect.any(String))
   })
 
+  it('resets only the 5h window when the other windows are unchecked', async () => {
+    const wrapper = mountDialog('reset_quota')
+    for (const name of ['daily', 'weekly', 'monthly']) {
+      await wrapper.get(`input[name="${name}"]`).setValue(false)
+    }
+    await wrapper.get('form').trigger('submit')
+    await flushPromises()
+    expect(bulkAction).toHaveBeenCalledWith({
+      subscription_ids: [1, 2], action: 'reset_quota', daily: false, weekly: false, monthly: false, five_hour: true
+    }, expect.any(String))
+  })
+
   it.each(['revoke', 'restore'] as const)('submits %s without unrelated parameters', async action => {
     const wrapper = mountDialog(action)
     expect(wrapper.text()).toContain(`admin.subscriptions.bulk.${action}Hint`)

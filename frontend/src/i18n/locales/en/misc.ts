@@ -2,6 +2,7 @@ export default {
 
   // Subscription Progress (Header component)
   subscriptionProgress: {
+    fiveHour: '5h',
     title: 'My Subscriptions',
     viewDetails: 'View subscription details',
     activeCount: '{count} active subscription(s)',
@@ -132,6 +133,8 @@ export default {
     daily: 'Daily',
     weekly: 'Weekly',
     monthly: 'Monthly',
+    fiveHour: '5 Hours',
+    fiveHourWindowHint: 'Window starts on first use and resets after 5 hours',
     daysRemaining: '{days} days remaining',
     expiresOn: 'Expires on {date}',
     resetIn: 'Resets in {time}',
