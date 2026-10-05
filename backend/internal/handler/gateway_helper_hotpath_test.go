@@ -516,3 +516,40 @@ func TestSetClaudeCodeClientContext_ParsedRequestProbeWithoutSystemPrompt(t *tes
 	SetClaudeCodeClientContext(c2, nil, &service.ParsedRequest{Model: "claude-sonnet-4-5", MaxTokens: 64})
 	require.False(t, service.IsClaudeCodeClient(c2.Request.Context()))
 }
+
+// 复用 ParsedRequest 时也必须带上首条 user 消息，否则计费块指纹无从校验，
+// 真实 CLI 请求会被误判。请求体取自 Claude Code 2.1.289 抓包（system-reminder 已截断）。
+func TestSetClaudeCodeClientContext_ParsedRequestVerifiesBillingFingerprint(t *testing.T) {
+	newBody := func(fingerprint string) []byte {
+		return []byte(`{
+			"model":"claude-opus-5-5",
+			"system":[
+				{"type":"text","text":"x-anthropic-billing-header: cc_version=2.1.289.` + fingerprint + `; cc_entrypoint=claude-vscode;"},
+				{"type":"text","text":"You are a Claude agent, built on Anthropic's Claude Agent SDK."}
+			],
+			"messages":[
+				{"role":"user","content":[
+					{"type":"text","text":"<system-reminder>\nCodebase and user instructions"},
+					{"type":"text","text":"<system-reminder>\nAs you answer the user's questions"},
+					{"type":"text","text":"你好，请帮我写一个快速排序的函数"}
+				]},
+				{"role":"system","content":[{"type":"text","text":"# Environment"}]}
+			],
+			"metadata":{"user_id":"{\"device_id\":\"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\",\"account_uuid\":\"\",\"session_id\":\"aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa\"}"}
+		}`)
+	}
+
+	for fingerprint, want := range map[string]bool{"260": true, "261": false} {
+		c, _ := newHelperTestContext(http.MethodPost, "/v1/messages")
+		c.Request.Header.Set("User-Agent", "claude-cli/2.1.289 (external, claude-vscode, agent-sdk/0.3.289)")
+		c.Request.Header.Set("X-App", "cli")
+		c.Request.Header.Set("anthropic-beta", "claude-code-20250219")
+		c.Request.Header.Set("anthropic-version", "2023-06-01")
+
+		parsedReq, err := service.ParseGatewayRequest(service.NewRequestBodyRef(newBody(fingerprint)), "")
+		require.NoError(t, err)
+
+		SetClaudeCodeClientContext(c, []byte(`{invalid`), parsedReq)
+		require.Equal(t, want, service.IsClaudeCodeClient(c.Request.Context()), "fingerprint %s", fingerprint)
+	}
+}

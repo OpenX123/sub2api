@@ -14,6 +14,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/service"
 
 	"github.com/gin-gonic/gin"
+	"github.com/tidwall/gjson"
 )
 
 const gatewayStreamHeartbeatBytesKey = "gateway_stream_heartbeat_bytes"
@@ -103,7 +104,39 @@ func claudeCodeBodyMapFromParsedRequest(parsedReq *service.ParsedRequest) map[st
 	if parsedReq.MetadataUserID != "" {
 		bodyMap["metadata"] = map[string]any{"user_id": parsedReq.MetadataUserID}
 	}
+	if first := claudeCodeFirstUserMessage(parsedReq.MessagesRaw()); first != nil {
+		bodyMap["messages"] = []any{first}
+	}
 	return bodyMap
+}
+
+// claudeCodeFirstUserMessage 只抽取首条 user 消息的文本块：计费块指纹校验仅依赖它，
+// 避免在热路径上解码整段对话。
+func claudeCodeFirstUserMessage(messagesRaw []byte) map[string]any {
+	if len(messagesRaw) == 0 {
+		return nil
+	}
+	var first map[string]any
+	gjson.ParseBytes(messagesRaw).ForEach(func(_, msg gjson.Result) bool {
+		if msg.Get("role").String() != "user" {
+			return true
+		}
+		content := msg.Get("content")
+		if content.Type == gjson.String {
+			first = map[string]any{"role": "user", "content": content.String()}
+			return false
+		}
+		blocks := []any{}
+		content.ForEach(func(_, block gjson.Result) bool {
+			if block.Get("type").String() == "text" {
+				blocks = append(blocks, map[string]any{"type": "text", "text": block.Get("text").String()})
+			}
+			return true
+		})
+		first = map[string]any{"role": "user", "content": blocks}
+		return false
+	})
+	return first
 }
 
 // 并发槽位等待相关常量

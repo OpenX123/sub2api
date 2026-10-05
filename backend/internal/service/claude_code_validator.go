@@ -2,10 +2,13 @@ package service
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"net/http"
 	"regexp"
 	"strconv"
 	"strings"
+	"unicode/utf16"
 
 	"github.com/Wei-Shaw/sub2api/internal/pkg/ctxkey"
 )
@@ -113,6 +116,12 @@ func (v *ClaudeCodeValidator) Validate(r *http.Request, body map[string]any) boo
 
 	// Step 4: messages 路径，进行严格验证
 
+	// 4.0 携带计费归因块时校验其 cc_version 与指纹，拦截篡改过的计费块。
+	// 必须先于 4.1：真实 CLI 还会携带身份 prose，仅靠 Dice 检查会让篡改块漏过。
+	if !claudeCodeBillingBlocksIntact(ua, body) {
+		return false
+	}
+
 	// 4.1 检查 system prompt 相似度
 	if !v.hasClaudeCodeSystemPrompt(body) {
 		return false
@@ -154,6 +163,96 @@ func (v *ClaudeCodeValidator) Validate(r *http.Request, body map[string]any) boo
 	}
 
 	return true
+}
+
+// claudeCodeBillingVersionPattern 提取计费块中的 cc_version=X.Y.Z.{fp}；指纹段缺失或
+// 格式不符时第 2 组为空。
+var claudeCodeBillingVersionPattern = regexp.MustCompile(`cc_version=(\d+\.\d+\.\d+)(?:\.([0-9a-fA-F]{3}))?\b`)
+
+// claudeCodeBillingBlocksIntact 校验 system 中每个计费归因块：cc_version 必须与
+// User-Agent 版本一致，且指纹与请求自身的首条 user 消息吻合。不携带计费块时返回 true，
+// 交由后续 system prompt 检查判定。
+//
+// 指纹算法与真实 CLI 抓包（2.1.289）对齐，见 claudeCodeFingerprintCandidates。
+// 盐值公开、算法可复刻，这里只能拦截随意改动的计费块，不构成密码学防伪。
+func claudeCodeBillingBlocksIntact(ua string, body map[string]any) bool {
+	systemEntries, _ := body["system"].([]any)
+	var candidates map[string]struct{}
+	for _, raw := range systemEntries {
+		entry, ok := raw.(map[string]any)
+		if !ok {
+			continue
+		}
+		text, _ := entry["text"].(string)
+		if !strings.HasPrefix(text, claudeCodeBillingHeaderPrefix) {
+			continue
+		}
+
+		match := claudeCodeBillingVersionPattern.FindStringSubmatch(text)
+		if match == nil || match[2] == "" {
+			return false
+		}
+		version, fingerprint := match[1], strings.ToLower(match[2])
+		if version != ExtractCLIVersion(ua) {
+			return false
+		}
+		if candidates == nil {
+			candidates = claudeCodeFingerprintCandidates(body, version)
+		}
+		if _, ok := candidates[fingerprint]; !ok {
+			return false
+		}
+	}
+	return true
+}
+
+// claudeCodeFingerprintCandidates 列出请求可能对应的合法指纹。
+//
+// 真实 CLI 取首条用户输入文本的第 4、7、20 个 UTF-16 码元（JS 字符串下标，不足补 '0'），
+// 计算 SHA256(salt + chars + version) 的 hex 前 3 位。CLI 会把 <system-reminder> 等
+// 注入块合并进同一条 user 消息，从请求体无法确定哪块是原始输入，故首条 user 消息的
+// 每个 text 块都作为候选；空串对应无文本的首条消息。
+func claudeCodeFingerprintCandidates(body map[string]any, version string) map[string]struct{} {
+	texts := []string{""}
+	messages, _ := body["messages"].([]any)
+	for _, raw := range messages {
+		msg, ok := raw.(map[string]any)
+		if !ok || msg["role"] != "user" {
+			continue
+		}
+		switch content := msg["content"].(type) {
+		case string:
+			texts = append(texts, content)
+		case []any:
+			for _, rawBlock := range content {
+				block, ok := rawBlock.(map[string]any)
+				if !ok || block["type"] != "text" {
+					continue
+				}
+				if text, ok := block["text"].(string); ok {
+					texts = append(texts, text)
+				}
+			}
+		}
+		break
+	}
+
+	candidates := make(map[string]struct{}, len(texts))
+	for _, text := range texts {
+		units := utf16.Encode([]rune(text))
+		var chars strings.Builder
+		for _, i := range []int{4, 7, 20} {
+			if i < len(units) {
+				// 落在代理对中间的码元与 JS 一样编码为 U+FFFD。
+				chars.WriteRune(rune(units[i]))
+			} else {
+				chars.WriteByte('0')
+			}
+		}
+		sum := sha256.Sum256([]byte(fingerprintSalt + chars.String() + version))
+		candidates[hex.EncodeToString(sum[:])[:3]] = struct{}{}
+	}
+	return candidates
 }
 
 func isMessagesCountTokensPath(path string) bool {
