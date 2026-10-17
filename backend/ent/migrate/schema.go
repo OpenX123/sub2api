@@ -1006,7 +1006,7 @@ var (
 			{
 				Name:    "group_sort_order",
 				Unique:  false,
-				Columns: []*schema.Column{GroupsColumns[50]},
+				Columns: []*schema.Column{GroupsColumns[51]},
 			},
 			{
 				Name:    "idx_groups_duplicate_operation_id_active",
