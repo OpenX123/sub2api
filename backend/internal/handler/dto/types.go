@@ -277,6 +277,10 @@ type Account struct {
 	// 从 extra 字段提取，方便前端显示和编辑
 	EnableSessionIDMasking *bool `json:"session_id_masking_enabled,omitempty"`
 
+	// 关闭 Claude OAuth 扩展提示词注入（仅 Anthropic OAuth/SetupToken 账号有效）
+	// 启用后 system 只注入 billing block + 身份前缀，不注入第 3 块扩展提示词
+	ClaudeOAuthExpansionPromptDisabled *bool `json:"claude_oauth_expansion_prompt_disabled,omitempty"`
+
 	// 缓存 TTL 强制替换（仅 Anthropic OAuth/SetupToken 账号有效）
 	// 启用后将所有 cache creation tokens 归入指定的 TTL 类型计费
 	CacheTTLOverrideEnabled *bool   `json:"cache_ttl_override_enabled,omitempty"`
@@ -376,21 +380,22 @@ type AccountListItem struct {
 	SessionWindowEnd    *time.Time `json:"session_window_end"`
 	SessionWindowStatus string     `json:"session_window_status"`
 
-	WindowCostLimit         *float64 `json:"window_cost_limit,omitempty"`
-	WindowCostStickyReserve *float64 `json:"window_cost_sticky_reserve,omitempty"`
-	MaxSessions             *int     `json:"max_sessions,omitempty"`
-	SessionIdleTimeoutMin   *int     `json:"session_idle_timeout_minutes,omitempty"`
-	BaseRPM                 *int     `json:"base_rpm,omitempty"`
-	RPMStrategy             *string  `json:"rpm_strategy,omitempty"`
-	RPMStickyBuffer         *int     `json:"rpm_sticky_buffer,omitempty"`
-	UserMsgQueueMode        *string  `json:"user_msg_queue_mode,omitempty"`
-	EnableTLSFingerprint    *bool    `json:"enable_tls_fingerprint,omitempty"`
-	TLSFingerprintProfileID *int64   `json:"tls_fingerprint_profile_id,omitempty"`
-	EnableSessionIDMasking  *bool    `json:"session_id_masking_enabled,omitempty"`
-	CacheTTLOverrideEnabled *bool    `json:"cache_ttl_override_enabled,omitempty"`
-	CacheTTLOverrideTarget  *string  `json:"cache_ttl_override_target,omitempty"`
-	CustomBaseURLEnabled    *bool    `json:"custom_base_url_enabled,omitempty"`
-	CustomBaseURL           *string  `json:"custom_base_url,omitempty"`
+	WindowCostLimit                    *float64 `json:"window_cost_limit,omitempty"`
+	WindowCostStickyReserve            *float64 `json:"window_cost_sticky_reserve,omitempty"`
+	MaxSessions                        *int     `json:"max_sessions,omitempty"`
+	SessionIdleTimeoutMin              *int     `json:"session_idle_timeout_minutes,omitempty"`
+	BaseRPM                            *int     `json:"base_rpm,omitempty"`
+	RPMStrategy                        *string  `json:"rpm_strategy,omitempty"`
+	RPMStickyBuffer                    *int     `json:"rpm_sticky_buffer,omitempty"`
+	UserMsgQueueMode                   *string  `json:"user_msg_queue_mode,omitempty"`
+	EnableTLSFingerprint               *bool    `json:"enable_tls_fingerprint,omitempty"`
+	TLSFingerprintProfileID            *int64   `json:"tls_fingerprint_profile_id,omitempty"`
+	EnableSessionIDMasking             *bool    `json:"session_id_masking_enabled,omitempty"`
+	ClaudeOAuthExpansionPromptDisabled *bool    `json:"claude_oauth_expansion_prompt_disabled,omitempty"`
+	CacheTTLOverrideEnabled            *bool    `json:"cache_ttl_override_enabled,omitempty"`
+	CacheTTLOverrideTarget             *string  `json:"cache_ttl_override_target,omitempty"`
+	CustomBaseURLEnabled               *bool    `json:"custom_base_url_enabled,omitempty"`
+	CustomBaseURL                      *string  `json:"custom_base_url,omitempty"`
 
 	QuotaLimit       *float64 `json:"quota_limit,omitempty"`
 	QuotaUsed        *float64 `json:"quota_used,omitempty"`

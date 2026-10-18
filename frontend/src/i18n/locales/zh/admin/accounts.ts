@@ -1162,6 +1162,10 @@ export default {
           label: '会话 ID 伪装',
           hint: '启用后将在 15 分钟内固定 metadata.user_id 中的 session ID，使上游认为请求来自同一会话'
         },
+        claudeOAuthExpansionPrompt: {
+          label: '不注入扩展提示词',
+          hint: '启用后，非 Claude Code 客户端的请求只注入 billing 块和一句 Claude Code 身份声明，不再注入大段通用扩展提示词；请求头伪装等其他行为不变'
+        },
         cacheTTLOverride: {
           label: '缓存 TTL 强制替换',
           hint: '将所有缓存创建 token 强制按指定的 TTL 类型（5分钟或1小时）计费',

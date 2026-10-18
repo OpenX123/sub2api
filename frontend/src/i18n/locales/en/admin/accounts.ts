@@ -1060,6 +1060,10 @@ export default {
           label: 'Session ID Masking',
           hint: 'When enabled, fixes the session ID in metadata.user_id for 15 minutes, making upstream think requests come from the same session'
         },
+        claudeOAuthExpansionPrompt: {
+          label: 'Skip Expansion Prompt',
+          hint: 'When enabled, requests from non-Claude-Code clients only get the billing block and the one-line Claude Code identity; the long generic expansion prompt is not injected. Header mimicry and other behavior stay unchanged'
+        },
         cacheTTLOverride: {
           label: 'Cache TTL Override',
           hint: 'Force all cache creation tokens to be billed as the selected TTL tier (5m or 1h)',

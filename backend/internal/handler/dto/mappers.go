@@ -325,6 +325,11 @@ func AccountFromServiceShallow(a *service.Account) *Account {
 			enabled := true
 			out.EnableSessionIDMasking = &enabled
 		}
+		// 关闭扩展提示词注入开关
+		if a.IsClaudeOAuthExpansionPromptDisabled() {
+			disabled := true
+			out.ClaudeOAuthExpansionPromptDisabled = &disabled
+		}
 		// 缓存 TTL 强制替换
 		if a.IsCacheTTLOverrideEnabled() {
 			enabled := true
@@ -480,8 +485,9 @@ func AccountListItemFromAccount(a *Account) *AccountListItem {
 		MaxSessions: a.MaxSessions, SessionIdleTimeoutMin: a.SessionIdleTimeoutMin, BaseRPM: a.BaseRPM,
 		RPMStrategy: a.RPMStrategy, RPMStickyBuffer: a.RPMStickyBuffer, UserMsgQueueMode: a.UserMsgQueueMode,
 		EnableTLSFingerprint: a.EnableTLSFingerprint, TLSFingerprintProfileID: a.TLSFingerprintProfileID,
-		EnableSessionIDMasking: a.EnableSessionIDMasking, CacheTTLOverrideEnabled: a.CacheTTLOverrideEnabled,
-		CacheTTLOverrideTarget: a.CacheTTLOverrideTarget, CustomBaseURLEnabled: a.CustomBaseURLEnabled,
+		EnableSessionIDMasking: a.EnableSessionIDMasking, ClaudeOAuthExpansionPromptDisabled: a.ClaudeOAuthExpansionPromptDisabled,
+		CacheTTLOverrideEnabled: a.CacheTTLOverrideEnabled,
+		CacheTTLOverrideTarget:  a.CacheTTLOverrideTarget, CustomBaseURLEnabled: a.CustomBaseURLEnabled,
 		CustomBaseURL: a.CustomBaseURL, QuotaLimit: a.QuotaLimit, QuotaUsed: a.QuotaUsed,
 		QuotaDailyLimit: a.QuotaDailyLimit, QuotaDailyUsed: a.QuotaDailyUsed, QuotaWeeklyLimit: a.QuotaWeeklyLimit,
 		QuotaWeeklyUsed: a.QuotaWeeklyUsed, QuotaDailyResetMode: a.QuotaDailyResetMode,

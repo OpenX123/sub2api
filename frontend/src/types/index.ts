@@ -1332,6 +1332,10 @@ export interface Account {
   // 启用后将在15分钟内固定 metadata.user_id 中的 session ID
   session_id_masking_enabled?: boolean | null
 
+  // 关闭 Claude OAuth 扩展提示词注入（仅 Anthropic OAuth/SetupToken 账号有效）
+  // 启用后 system 只注入 billing block + 身份前缀，不注入第 3 块扩展提示词
+  claude_oauth_expansion_prompt_disabled?: boolean | null
+
   // 缓存 TTL 强制替换（仅 Anthropic OAuth/SetupToken 账号有效）
   cache_ttl_override_enabled?: boolean | null
   cache_ttl_override_target?: string | null

@@ -2497,6 +2497,25 @@ func (a *Account) IsSessionIDMaskingEnabled() bool {
 	return false
 }
 
+// IsClaudeOAuthExpansionPromptDisabled 检查是否关闭 Claude OAuth 扩展提示词注入
+// 仅适用于 Anthropic OAuth/SetupToken 类型账号
+// 启用后 mimic 路径的 system 只注入 billing block + Claude Code 身份前缀两块，
+// 不再注入通用扩展提示词（第 3 块）；请求头等其他伪装照常进行
+func (a *Account) IsClaudeOAuthExpansionPromptDisabled() bool {
+	if !a.IsAnthropicOAuthOrSetupToken() {
+		return false
+	}
+	if a.Extra == nil {
+		return false
+	}
+	if v, ok := a.Extra["claude_oauth_expansion_prompt_disabled"]; ok {
+		if disabled, ok := v.(bool); ok {
+			return disabled
+		}
+	}
+	return false
+}
+
 // IsCustomBaseURLEnabled 检查是否启用自定义 base URL 中继转发
 // 仅适用于 Anthropic OAuth/SetupToken 类型账号
 func (a *Account) IsCustomBaseURLEnabled() bool {

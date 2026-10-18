@@ -3148,6 +3148,33 @@
           </div>
         </div>
 
+        <!-- Claude OAuth Expansion Prompt -->
+        <div class="rounded-lg border border-gray-200 p-4 dark:border-dark-600">
+          <div class="flex items-center justify-between">
+            <div>
+              <label class="input-label mb-0">{{ t('admin.accounts.quotaControl.claudeOAuthExpansionPrompt.label') }}</label>
+              <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                {{ t('admin.accounts.quotaControl.claudeOAuthExpansionPrompt.hint') }}
+              </p>
+            </div>
+            <button
+              type="button"
+              @click="claudeOAuthExpansionPromptDisabled = !claudeOAuthExpansionPromptDisabled"
+              :class="[
+                'relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2',
+                claudeOAuthExpansionPromptDisabled ? 'bg-primary-600' : 'bg-gray-200 dark:bg-dark-600'
+              ]"
+            >
+              <span
+                :class="[
+                  'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out',
+                  claudeOAuthExpansionPromptDisabled ? 'translate-x-5' : 'translate-x-0'
+                ]"
+              />
+            </button>
+          </div>
+        </div>
+
         <!-- Cache TTL Override -->
         <div class="rounded-lg border border-gray-200 p-4 dark:border-dark-600">
           <div class="flex items-center justify-between">
@@ -4894,6 +4921,7 @@ const tlsFingerprintEnabled = ref(false)
 const tlsFingerprintProfileId = ref<number | null>(null)
 const tlsFingerprintProfiles = ref<{ id: number; name: string }[]>([])
 const sessionIdMaskingEnabled = ref(false)
+const claudeOAuthExpansionPromptDisabled = ref(false)
 const cacheTTLOverrideEnabled = ref(false)
 const cacheTTLOverrideTarget = ref<string>('5m')
 const customBaseUrlEnabled = ref(false)
@@ -5696,6 +5724,7 @@ const resetForm = () => {
   tlsFingerprintEnabled.value = false
   tlsFingerprintProfileId.value = null
   sessionIdMaskingEnabled.value = false
+  claudeOAuthExpansionPromptDisabled.value = false
   cacheTTLOverrideEnabled.value = false
   cacheTTLOverrideTarget.value = '5m'
   customBaseUrlEnabled.value = false
@@ -7294,6 +7323,11 @@ const handleAnthropicExchange = async (authCode: string) => {
       extra.session_id_masking_enabled = true
     }
 
+    // Add Claude OAuth expansion prompt settings
+    if (claudeOAuthExpansionPromptDisabled.value) {
+      extra.claude_oauth_expansion_prompt_disabled = true
+    }
+
     // Add cache TTL override settings
     if (cacheTTLOverrideEnabled.value) {
       extra.cache_ttl_override_enabled = true
@@ -7417,6 +7451,11 @@ const handleCookieAuth = async (sessionKey: string) => {
         // Add session ID masking settings
         if (sessionIdMaskingEnabled.value) {
           extra.session_id_masking_enabled = true
+        }
+
+        // Add Claude OAuth expansion prompt settings
+        if (claudeOAuthExpansionPromptDisabled.value) {
+          extra.claude_oauth_expansion_prompt_disabled = true
         }
 
         // Add cache TTL override settings
