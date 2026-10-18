@@ -871,6 +871,34 @@ describe('EditAccountModal', () => {
     })
   })
 
+  it.each(['oauth', 'setup-token'])('loads and submits the model whitelist for Anthropic %s accounts', async (type) => {
+    const account = {
+      ...buildAccount(),
+      name: 'Claude OAuth',
+      platform: 'anthropic',
+      type,
+      credentials: {
+        access_token: 'oauth-token',
+        model_mapping: { 'claude-opus-4-7': 'claude-opus-4-7' }
+      }
+    }
+    updateAccountMock.mockReset().mockResolvedValue(account)
+    checkMixedChannelRiskMock.mockReset().mockResolvedValue({ has_risk: false })
+
+    const wrapper = mountModal(account)
+
+    expect(wrapper.get('[data-testid="model-whitelist-value"]').text()).toBe('claude-opus-4-7')
+
+    await wrapper.get('[data-testid="rewrite-to-snapshot"]').trigger('click')
+    await wrapper.get('form#edit-account-form').trigger('submit.prevent')
+
+    expect(updateAccountMock).toHaveBeenCalledTimes(1)
+    expect(updateAccountMock.mock.calls[0]?.[1]?.credentials).toMatchObject({
+      access_token: 'oauth-token',
+      model_mapping: { 'gpt-5.2-2025-12-11': 'gpt-5.2-2025-12-11' }
+    })
+  })
+
   it('submits OpenAI compact mode and compact-only model mapping', async () => {
     const account = buildAccount()
     account.extra = {
