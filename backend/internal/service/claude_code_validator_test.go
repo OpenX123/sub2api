@@ -123,7 +123,7 @@ func TestClaudeCodeValidator_BillingBlockRecognizedWithoutIdentityPrompt(t *test
 		"system": []any{
 			map[string]any{
 				"type": "text",
-				"text": "x-anthropic-billing-header: cc_version=2.1.162.884; cc_entrypoint=cli; cch=d8726;",
+				"text": "x-anthropic-billing-header: cc_version=2.1.162.553; cc_entrypoint=cli; cch=d8726;",
 			},
 			map[string]any{
 				"type": "text",
@@ -351,7 +351,7 @@ func TestClaudeCodeValidator_BillingBlockVSCodeEntrypointRecognized(t *testing.T
 		"system": []any{
 			map[string]any{
 				"type": "text",
-				"text": "x-anthropic-billing-header: cc_version=2.1.181.f17; cc_entrypoint=claude-vscode;",
+				"text": "x-anthropic-billing-header: cc_version=2.1.181.2f9; cc_entrypoint=claude-vscode;",
 			},
 			map[string]any{
 				"type": "text",
@@ -380,7 +380,7 @@ func TestClaudeCodeValidator_BillingBlockWithoutEntrypointFallsThrough(t *testin
 		"system": []any{
 			map[string]any{
 				"type": "text",
-				"text": "x-anthropic-billing-header: cc_version=2.1.162.884; cch=d8726;",
+				"text": "x-anthropic-billing-header: cc_version=2.1.162.553; cch=d8726;",
 			},
 			map[string]any{
 				"type": "text",
@@ -408,7 +408,7 @@ func TestClaudeCodeValidator_BillingBlockStillRequiresClaudeCodeUA(t *testing.T)
 		"system": []any{
 			map[string]any{
 				"type": "text",
-				"text": "x-anthropic-billing-header: cc_version=2.1.162.884; cc_entrypoint=cli; cch=d8726;",
+				"text": "x-anthropic-billing-header: cc_version=2.1.162.553; cc_entrypoint=cli; cch=d8726;",
 			},
 		},
 	})
@@ -438,7 +438,7 @@ func TestClaudeCodeValidator_BillingBlockRecognizedWithoutCCH(t *testing.T) {
 			map[string]any{
 				"type": "text",
 				// 注意：无 cch 段，对齐新版 CLI 与本仓新的注入格式。
-				"text": "x-anthropic-billing-header: cc_version=2.1.162.884; cc_entrypoint=cli;",
+				"text": "x-anthropic-billing-header: cc_version=2.1.162.553; cc_entrypoint=cli;",
 			},
 			map[string]any{
 				"type": "text",
@@ -467,7 +467,7 @@ func TestClaudeCodeValidator_NoCCHBlockStillRequiresClaudeCodeUA(t *testing.T) {
 		"system": []any{
 			map[string]any{
 				"type": "text",
-				"text": "x-anthropic-billing-header: cc_version=2.1.162.884; cc_entrypoint=cli;",
+				"text": "x-anthropic-billing-header: cc_version=2.1.162.553; cc_entrypoint=cli;",
 			},
 		},
 	})
@@ -597,4 +597,70 @@ func TestClaudeCodeValidator_MaxTokensOneProbeStillRequiresClaudeCodeUA(t *testi
 	req.Header.Set("User-Agent", "python-requests/2.32")
 
 	require.False(t, validator.Validate(req, map[string]any{"model": "claude-sonnet-4-5", "max_tokens": 1}))
+}
+
+// 真实 Claude Code 2.1.289（VSCode 扩展）抓包：主请求首条 user 消息前部是合并进来的
+// <system-reminder> 注入块，指纹取自其后的原始输入；标题子请求取自 <session> 块。
+// 中文用例锁定按 UTF-16 下标取字符（按字节取会得到 6b7 而非 414）。
+var claudeCode289FingerprintCases = []struct {
+	name        string
+	fingerprint string
+	userBlocks  []string
+}{
+	{"main_ascii", "143", []string{"<system-reminder>\nCodebase and user instructions", "<system-reminder>\nAs you answer the user's questions", "hello world, please say hi back"}},
+	{"main_chinese", "260", []string{"<system-reminder>\nCodebase and user instructions", "<system-reminder>\nAs you answer the user's questions", "你好，请帮我写一个快速排序的函数"}},
+	{"main_short", "81d", []string{"<system-reminder>\nCodebase and user instructions", "<system-reminder>\nAs you answer the user's questions", "Hi"}},
+	{"title_ascii", "f4d", []string{"<session>\nhello world, please say hi back\n</sess"}},
+	{"title_chinese", "414", []string{"<session>\n你好，请帮我写一个快速排序的函数\n</session>\n\nWrite the"}},
+}
+
+func newClaudeCode289Request() *http.Request {
+	req := httptest.NewRequest(http.MethodPost, "http://example.com/v1/messages?beta=true", nil)
+	req.Header.Set("User-Agent", "claude-cli/2.1.289 (external, claude-vscode, agent-sdk/0.3.289)")
+	req.Header.Set("X-App", "cli")
+	req.Header.Set("anthropic-beta", "claude-code-20250219")
+	req.Header.Set("anthropic-version", "2023-06-01")
+	return req
+}
+
+func claudeCode289Body(billingText string, userBlocks []string) map[string]any {
+	content := make([]any, 0, len(userBlocks))
+	for _, text := range userBlocks {
+		content = append(content, map[string]any{"type": "text", "text": text})
+	}
+	return map[string]any{
+		"model": "claude-opus-5-5",
+		"system": []any{
+			map[string]any{"type": "text", "text": billingText},
+			map[string]any{"type": "text", "text": "You are a Claude agent, built on Anthropic's Claude Agent SDK."},
+		},
+		"messages": []any{map[string]any{"role": "user", "content": content}},
+		"metadata": map[string]any{"user_id": claudeCodeMetadataUserIDJSON},
+	}
+}
+
+func TestClaudeCodeValidator_BillingFingerprintMatchesRealCLI(t *testing.T) {
+	validator := NewClaudeCodeValidator()
+	for _, tc := range claudeCode289FingerprintCases {
+		t.Run(tc.name, func(t *testing.T) {
+			billing := "x-anthropic-billing-header: cc_version=2.1.289." + tc.fingerprint + "; cc_entrypoint=claude-vscode;"
+			require.True(t, validator.Validate(newClaudeCode289Request(), claudeCode289Body(billing, tc.userBlocks)))
+		})
+	}
+}
+
+// 篡改计费块（指纹、版本号、删去指纹段）时，即使请求仍携带身份 prose 也必须被拒。
+func TestClaudeCodeValidator_TamperedBillingBlockRejected(t *testing.T) {
+	validator := NewClaudeCodeValidator()
+	userBlocks := claudeCode289FingerprintCases[0].userBlocks
+	for name, billing := range map[string]string{
+		"fingerprint":        "x-anthropic-billing-header: cc_version=2.1.289.000; cc_entrypoint=claude-vscode;",
+		"version_mismatch":   "x-anthropic-billing-header: cc_version=2.1.288.143; cc_entrypoint=claude-vscode;",
+		"fingerprint_absent": "x-anthropic-billing-header: cc_version=2.1.289; cc_entrypoint=claude-vscode;",
+		"fingerprint_junk":   "x-anthropic-billing-header: cc_version=2.1.289.14zz; cc_entrypoint=claude-vscode;",
+	} {
+		t.Run(name, func(t *testing.T) {
+			require.False(t, validator.Validate(newClaudeCode289Request(), claudeCode289Body(billing, userBlocks)))
+		})
+	}
 }

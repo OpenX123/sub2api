@@ -73,6 +73,55 @@ func (s *BillingCacheSuite) TestUserBalance() {
 			},
 		},
 		{
+			name: "update_usage_accumulates_within_active_5h_window",
+			fn: func(ctx context.Context, rdb *redis.Client, cache service.BillingCache) {
+				userID := int64(14)
+				groupID := int64(24)
+				windowStart := time.Now().Add(-time.Hour).Truncate(time.Second)
+
+				data := &service.SubscriptionCacheData{
+					Status:        "active",
+					ExpiresAt:     time.Now().Add(1 * time.Hour),
+					Usage5h:       4.0,
+					Window5hStart: &windowStart,
+					Version:       1,
+				}
+				require.NoError(s.T(), cache.SetSubscriptionCache(ctx, userID, groupID, data), "SetSubscriptionCache")
+				require.NoError(s.T(), cache.UpdateSubscriptionUsage(ctx, userID, groupID, 0.5), "UpdateSubscriptionUsage")
+
+				gotSub, err := cache.GetSubscriptionCache(ctx, userID, groupID)
+				require.NoError(s.T(), err, "GetSubscriptionCache after update")
+				require.Equal(s.T(), 4.5, gotSub.Usage5h)
+				require.NotNil(s.T(), gotSub.Window5hStart)
+				require.True(s.T(), gotSub.Window5hStart.Equal(windowStart), "进行中的窗口起点不变")
+			},
+		},
+		{
+			name: "update_usage_opens_new_5h_window_after_expiry",
+			fn: func(ctx context.Context, rdb *redis.Client, cache service.BillingCache) {
+				userID := int64(15)
+				groupID := int64(25)
+				expiredStart := time.Now().Add(-6 * time.Hour).Truncate(time.Second)
+
+				data := &service.SubscriptionCacheData{
+					Status:        "active",
+					ExpiresAt:     time.Now().Add(1 * time.Hour),
+					Usage5h:       9.0,
+					Window5hStart: &expiredStart,
+					Version:       1,
+				}
+				require.NoError(s.T(), cache.SetSubscriptionCache(ctx, userID, groupID, data), "SetSubscriptionCache")
+				before := time.Now().Truncate(time.Second)
+				require.NoError(s.T(), cache.UpdateSubscriptionUsage(ctx, userID, groupID, 0.5), "UpdateSubscriptionUsage")
+
+				gotSub, err := cache.GetSubscriptionCache(ctx, userID, groupID)
+				require.NoError(s.T(), err, "GetSubscriptionCache after update")
+				require.Equal(s.T(), 0.5, gotSub.Usage5h, "过期窗口的旧用量不累加，从本次费用重新计")
+				require.NotNil(s.T(), gotSub.Window5hStart)
+				require.False(s.T(), gotSub.Window5hStart.Before(before), "新窗口从本次计费时刻开始")
+			},
+		},
+		{
 			name: "invalidate_removes_key",
 			fn: func(ctx context.Context, rdb *redis.Client, cache service.BillingCache) {
 				userID := int64(100)

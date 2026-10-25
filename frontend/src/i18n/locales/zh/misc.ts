@@ -2,6 +2,7 @@ export default {
 
   // Subscription Progress (Header component)
   subscriptionProgress: {
+    fiveHour: '5h',
     title: '我的订阅',
     viewDetails: '查看订阅详情',
     activeCount: '{count} 个有效订阅',
@@ -62,6 +63,8 @@ export default {
   purchase: {
     title: '充值/订阅',
     description: '通过内嵌页面完成充值/订阅',
+    rechargeDescription: '通过内嵌页面完成充值',
+    subscriptionDescription: '通过内嵌页面完成订阅',
     openInNewTab: '新窗口打开',
     notEnabledTitle: '该功能未开启',
     notEnabledDesc: '管理员暂未开启充值/订阅入口，请联系管理员。',
@@ -127,6 +130,8 @@ export default {
     daily: '每日',
     weekly: '每周',
     monthly: '每月',
+    fiveHour: '5 小时',
+    fiveHourWindowHint: '首次使用后开始计时，5 小时后重置',
     daysRemaining: '剩余 {days} 天',
     expiresOn: '{date} 到期',
     resetIn: '{time} 后重置',
@@ -313,6 +318,13 @@ export default {
     amountLabel: '充值金额',
     paymentAmount: '支付金额',
     creditedBalance: '到账余额',
+    rechargeBonus: {
+      creditedShort: '到账 {amount}',
+      payShort: '实付 {amount}',
+      amountLabel: '赠送额度',
+      amountLabelWithPercent: '赠送额度 (+{percent}%)',
+      discountLabelWithPercent: '优惠 ({percent}% OFF)',
+    },
     quickAmounts: '快捷金额',
     customAmount: '自定义金额',
     enterAmount: '输入金额',
@@ -379,6 +391,8 @@ export default {
       amount: '金额',
       payAmount: '实付',
       creditedAmount: '到账金额',
+      bonusAmount: '赠送额度',
+      bonusIncluded: '含赠送 {amount}',
       fee: '手续费',
       baseAmount: '充值金额',
       includedInPayAmount: '已含在实付金额中',
@@ -409,6 +423,7 @@ export default {
     tabSubscribe: '订阅',
     noPlans: '暂无可用订阅套餐',
     notAvailable: '充值功能暂未开放',
+    billingUnavailable: '充值与订阅均暂未开放，请联系管理员。',
     confirmSubscription: '确认订阅',
     confirmCancel: '确定要取消此订单吗？',
     amountTooLow: '最低金额为 {min}',

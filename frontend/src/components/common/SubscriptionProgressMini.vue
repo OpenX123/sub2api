@@ -1,5 +1,5 @@
 <template>
-  <div v-if="hasActiveSubscriptions" class="relative" ref="containerRef">
+  <div v-if="subscriptionFeatureEnabled && hasActiveSubscriptions" class="relative" ref="containerRef">
     <!-- Mini Progress Display -->
     <button
       @click="toggleTooltip"
@@ -72,6 +72,22 @@
 
               <!-- Progress bars for limited subscriptions -->
               <template v-else>
+                <div v-if="subscription.group?.rate_limit_5h != null" class="flex items-center gap-2">
+                  <span class="w-8 flex-shrink-0 text-[10px] text-gray-500">{{
+                    t('subscriptionProgress.fiveHour')
+                  }}</span>
+                  <div class="h-1.5 min-w-0 flex-1 rounded-full bg-gray-200 dark:bg-dark-600">
+                    <div
+                      class="h-1.5 rounded-full transition-all"
+                      :class="getPercentageBarClass(getFiveHourPercentage(subscription))"
+                      :style="{ width: `${Math.min(getFiveHourPercentage(subscription), 100)}%` }"
+                    ></div>
+                  </div>
+                  <span class="w-24 flex-shrink-0 text-right text-[10px] text-gray-500">
+                    {{ formatUsage(subscription.usage_5h_usd, subscription.group?.rate_limit_5h) }}
+                  </span>
+                </div>
+
                 <div v-if="subscription.group?.daily_limit_usd" class="flex items-center gap-2">
                   <span class="w-8 flex-shrink-0 text-[10px] text-gray-500">{{
                     t('subscriptionProgress.daily')
@@ -182,7 +198,9 @@ import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
 import Icon from '@/components/icons/Icon.vue'
 import { useSubscriptionStore } from '@/stores'
+import { FeatureFlags, isFeatureFlagEnabled } from '@/utils/featureFlags'
 import type { UserSubscription } from '@/types'
+import { getExpirationDateRelation } from '@/utils/subscriptionQuota'
 
 const { t } = useI18n()
 
@@ -194,6 +212,8 @@ const tooltipOpen = ref(false)
 // Use store data instead of local state
 const activeSubscriptions = computed(() => subscriptionStore.activeSubscriptions)
 const hasActiveSubscriptions = computed(() => subscriptionStore.hasActiveSubscriptions)
+// 订阅功能关闭后，即使用户仍持有后台分配的订阅，顶栏也不再露出订阅进度与「查看全部订阅」入口。
+const subscriptionFeatureEnabled = computed(() => isFeatureFlagEnabled(FeatureFlags.subscription))
 
 const displaySubscriptions = computed(() => {
   // Sort by most usage (highest percentage first)
@@ -215,6 +235,9 @@ function getMaxUsagePercentage(sub: UserSubscription): number {
   if (sub.group?.monthly_limit_usd) {
     percentages.push(((sub.monthly_usage_usd || 0) / sub.group.monthly_limit_usd) * 100)
   }
+  if (sub.group?.rate_limit_5h != null) {
+    percentages.push(getFiveHourPercentage(sub))
+  }
   return percentages.length > 0 ? Math.max(...percentages) : 0
 }
 
@@ -222,8 +245,23 @@ function isUnlimited(sub: UserSubscription): boolean {
   return (
     !sub.group?.daily_limit_usd &&
     !sub.group?.weekly_limit_usd &&
-    !sub.group?.monthly_limit_usd
+    !sub.group?.monthly_limit_usd &&
+    sub.group?.rate_limit_5h == null
   )
+}
+
+// 5h 限额为 0 表示禁止使用，按已用满展示。
+function getFiveHourPercentage(sub: UserSubscription): number {
+  const limit = sub.group?.rate_limit_5h
+  if (limit == null) return 0
+  if (limit <= 0) return 100
+  return ((sub.usage_5h_usd || 0) / limit) * 100
+}
+
+function getPercentageBarClass(percentage: number): string {
+  if (percentage >= 90) return 'bg-red-500'
+  if (percentage >= 70) return 'bg-orange-500'
+  return 'bg-green-500'
 }
 
 function getProgressDotClass(sub: UserSubscription): string {
@@ -261,10 +299,11 @@ function formatDaysRemaining(expiresAt: string): string {
   const now = new Date()
   const expires = new Date(expiresAt)
   const diff = expires.getTime() - now.getTime()
-  if (diff < 0) return t('subscriptionProgress.expired')
+  const relation = getExpirationDateRelation(expires, now)
+  if (relation === 'expired') return t('subscriptionProgress.expired')
+  if (relation === 'today') return t('subscriptionProgress.expiresToday')
+  if (relation === 'tomorrow') return t('subscriptionProgress.expiresTomorrow')
   const days = Math.ceil(diff / (1000 * 60 * 60 * 24))
-  if (days === 0) return t('subscriptionProgress.expiresToday')
-  if (days === 1) return t('subscriptionProgress.expiresTomorrow')
   return t('subscriptionProgress.daysRemaining', { days })
 }
 
@@ -296,6 +335,7 @@ onMounted(() => {
   document.addEventListener('click', handleClickOutside)
   // Trigger initial fetch if not already loaded
   // The actual data loading is handled by App.vue globally
+  if (!subscriptionFeatureEnabled.value) return
   subscriptionStore.fetchActiveSubscriptions().catch((error) => {
     console.error('Failed to load subscriptions in SubscriptionProgressMini:', error)
   })

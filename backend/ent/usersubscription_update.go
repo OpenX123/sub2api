@@ -250,6 +250,47 @@ func (_u *UserSubscriptionUpdate) AddMonthlyUsageUsd(v float64) *UserSubscriptio
 	return _u
 }
 
+// SetUsage5h sets the "usage_5h" field.
+func (_u *UserSubscriptionUpdate) SetUsage5h(v float64) *UserSubscriptionUpdate {
+	_u.mutation.ResetUsage5h()
+	_u.mutation.SetUsage5h(v)
+	return _u
+}
+
+// SetNillableUsage5h sets the "usage_5h" field if the given value is not nil.
+func (_u *UserSubscriptionUpdate) SetNillableUsage5h(v *float64) *UserSubscriptionUpdate {
+	if v != nil {
+		_u.SetUsage5h(*v)
+	}
+	return _u
+}
+
+// AddUsage5h adds value to the "usage_5h" field.
+func (_u *UserSubscriptionUpdate) AddUsage5h(v float64) *UserSubscriptionUpdate {
+	_u.mutation.AddUsage5h(v)
+	return _u
+}
+
+// SetWindow5hStart sets the "window_5h_start" field.
+func (_u *UserSubscriptionUpdate) SetWindow5hStart(v time.Time) *UserSubscriptionUpdate {
+	_u.mutation.SetWindow5hStart(v)
+	return _u
+}
+
+// SetNillableWindow5hStart sets the "window_5h_start" field if the given value is not nil.
+func (_u *UserSubscriptionUpdate) SetNillableWindow5hStart(v *time.Time) *UserSubscriptionUpdate {
+	if v != nil {
+		_u.SetWindow5hStart(*v)
+	}
+	return _u
+}
+
+// ClearWindow5hStart clears the value of the "window_5h_start" field.
+func (_u *UserSubscriptionUpdate) ClearWindow5hStart() *UserSubscriptionUpdate {
+	_u.mutation.ClearWindow5hStart()
+	return _u
+}
+
 // SetAssignedBy sets the "assigned_by" field.
 func (_u *UserSubscriptionUpdate) SetAssignedBy(v int64) *UserSubscriptionUpdate {
 	_u.mutation.SetAssignedBy(v)
@@ -515,6 +556,18 @@ func (_u *UserSubscriptionUpdate) sqlSave(ctx context.Context) (_node int, err e
 	}
 	if value, ok := _u.mutation.AddedMonthlyUsageUsd(); ok {
 		_spec.AddField(usersubscription.FieldMonthlyUsageUsd, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.Usage5h(); ok {
+		_spec.SetField(usersubscription.FieldUsage5h, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedUsage5h(); ok {
+		_spec.AddField(usersubscription.FieldUsage5h, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.Window5hStart(); ok {
+		_spec.SetField(usersubscription.FieldWindow5hStart, field.TypeTime, value)
+	}
+	if _u.mutation.Window5hStartCleared() {
+		_spec.ClearField(usersubscription.FieldWindow5hStart, field.TypeTime)
 	}
 	if value, ok := _u.mutation.AssignedAt(); ok {
 		_spec.SetField(usersubscription.FieldAssignedAt, field.TypeTime, value)
@@ -896,6 +949,47 @@ func (_u *UserSubscriptionUpdateOne) AddMonthlyUsageUsd(v float64) *UserSubscrip
 	return _u
 }
 
+// SetUsage5h sets the "usage_5h" field.
+func (_u *UserSubscriptionUpdateOne) SetUsage5h(v float64) *UserSubscriptionUpdateOne {
+	_u.mutation.ResetUsage5h()
+	_u.mutation.SetUsage5h(v)
+	return _u
+}
+
+// SetNillableUsage5h sets the "usage_5h" field if the given value is not nil.
+func (_u *UserSubscriptionUpdateOne) SetNillableUsage5h(v *float64) *UserSubscriptionUpdateOne {
+	if v != nil {
+		_u.SetUsage5h(*v)
+	}
+	return _u
+}
+
+// AddUsage5h adds value to the "usage_5h" field.
+func (_u *UserSubscriptionUpdateOne) AddUsage5h(v float64) *UserSubscriptionUpdateOne {
+	_u.mutation.AddUsage5h(v)
+	return _u
+}
+
+// SetWindow5hStart sets the "window_5h_start" field.
+func (_u *UserSubscriptionUpdateOne) SetWindow5hStart(v time.Time) *UserSubscriptionUpdateOne {
+	_u.mutation.SetWindow5hStart(v)
+	return _u
+}
+
+// SetNillableWindow5hStart sets the "window_5h_start" field if the given value is not nil.
+func (_u *UserSubscriptionUpdateOne) SetNillableWindow5hStart(v *time.Time) *UserSubscriptionUpdateOne {
+	if v != nil {
+		_u.SetWindow5hStart(*v)
+	}
+	return _u
+}
+
+// ClearWindow5hStart clears the value of the "window_5h_start" field.
+func (_u *UserSubscriptionUpdateOne) ClearWindow5hStart() *UserSubscriptionUpdateOne {
+	_u.mutation.ClearWindow5hStart()
+	return _u
+}
+
 // SetAssignedBy sets the "assigned_by" field.
 func (_u *UserSubscriptionUpdateOne) SetAssignedBy(v int64) *UserSubscriptionUpdateOne {
 	_u.mutation.SetAssignedBy(v)
@@ -1191,6 +1285,18 @@ func (_u *UserSubscriptionUpdateOne) sqlSave(ctx context.Context) (_node *UserSu
 	}
 	if value, ok := _u.mutation.AddedMonthlyUsageUsd(); ok {
 		_spec.AddField(usersubscription.FieldMonthlyUsageUsd, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.Usage5h(); ok {
+		_spec.SetField(usersubscription.FieldUsage5h, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedUsage5h(); ok {
+		_spec.AddField(usersubscription.FieldUsage5h, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.Window5hStart(); ok {
+		_spec.SetField(usersubscription.FieldWindow5hStart, field.TypeTime, value)
+	}
+	if _u.mutation.Window5hStartCleared() {
+		_spec.ClearField(usersubscription.FieldWindow5hStart, field.TypeTime)
 	}
 	if value, ok := _u.mutation.AssignedAt(); ok {
 		_spec.SetField(usersubscription.FieldAssignedAt, field.TypeTime, value)

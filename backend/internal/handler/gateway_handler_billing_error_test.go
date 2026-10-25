@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	pkgerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/stretchr/testify/require"
 )
@@ -124,5 +125,24 @@ func TestBillingErrorDetails_T10_QuotaExhaustedReturns429WithRetryAfter(t *testi
 				t.Errorf("retryAfter = %d, want ~3600", retryAfter)
 			}
 		})
+	}
+}
+
+func TestBillingErrorDetails_SubscriptionUsageLimitsMapTo429WithResetSeconds(t *testing.T) {
+	resetAt := time.Now().Add(2 * time.Hour).UTC().Format(time.RFC3339)
+	for _, base := range []*pkgerrors.ApplicationError{
+		service.ErrFiveHourLimitExceeded,
+		service.ErrDailyLimitExceeded,
+		service.ErrWeeklyLimitExceeded,
+		service.ErrMonthlyLimitExceeded,
+	} {
+		err := base.WithMetadata(map[string]string{"window_resets_at": resetAt})
+
+		status, code, msg, retryAfter := billingErrorDetails(err)
+
+		require.Equal(t, http.StatusTooManyRequests, status, "status for %v", base)
+		require.Equal(t, "rate_limit_exceeded", code)
+		require.Equal(t, base.Message+", resets at "+resetAt, msg, "消息应带上重置时间")
+		require.InDelta(t, 2*60*60, retryAfter, 5, "Retry-After 应指向窗口重置时间")
 	}
 }

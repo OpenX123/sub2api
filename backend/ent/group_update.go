@@ -97,6 +97,12 @@ func (_u *GroupUpdate) ClearDescription() *GroupUpdate {
 	return _u
 }
 
+// SetI18n sets the "i18n" field.
+func (_u *GroupUpdate) SetI18n(v domain.GroupI18n) *GroupUpdate {
+	_u.mutation.SetI18n(v)
+	return _u
+}
+
 // SetRateMultiplier sets the "rate_multiplier" field.
 func (_u *GroupUpdate) SetRateMultiplier(v float64) *GroupUpdate {
 	_u.mutation.ResetRateMultiplier()
@@ -315,6 +321,33 @@ func (_u *GroupUpdate) AddMonthlyLimitUsd(v float64) *GroupUpdate {
 // ClearMonthlyLimitUsd clears the value of the "monthly_limit_usd" field.
 func (_u *GroupUpdate) ClearMonthlyLimitUsd() *GroupUpdate {
 	_u.mutation.ClearMonthlyLimitUsd()
+	return _u
+}
+
+// SetRateLimit5h sets the "rate_limit_5h" field.
+func (_u *GroupUpdate) SetRateLimit5h(v float64) *GroupUpdate {
+	_u.mutation.ResetRateLimit5h()
+	_u.mutation.SetRateLimit5h(v)
+	return _u
+}
+
+// SetNillableRateLimit5h sets the "rate_limit_5h" field if the given value is not nil.
+func (_u *GroupUpdate) SetNillableRateLimit5h(v *float64) *GroupUpdate {
+	if v != nil {
+		_u.SetRateLimit5h(*v)
+	}
+	return _u
+}
+
+// AddRateLimit5h adds value to the "rate_limit_5h" field.
+func (_u *GroupUpdate) AddRateLimit5h(v float64) *GroupUpdate {
+	_u.mutation.AddRateLimit5h(v)
+	return _u
+}
+
+// ClearRateLimit5h clears the value of the "rate_limit_5h" field.
+func (_u *GroupUpdate) ClearRateLimit5h() *GroupUpdate {
+	_u.mutation.ClearRateLimit5h()
 	return _u
 }
 
@@ -1581,6 +1614,9 @@ func (_u *GroupUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if _u.mutation.DescriptionCleared() {
 		_spec.ClearField(group.FieldDescription, field.TypeString)
 	}
+	if value, ok := _u.mutation.I18n(); ok {
+		_spec.SetField(group.FieldI18n, field.TypeJSON, value)
+	}
 	if value, ok := _u.mutation.RateMultiplier(); ok {
 		_spec.SetField(group.FieldRateMultiplier, field.TypeFloat64, value)
 	}
@@ -1643,6 +1679,15 @@ func (_u *GroupUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if _u.mutation.MonthlyLimitUsdCleared() {
 		_spec.ClearField(group.FieldMonthlyLimitUsd, field.TypeFloat64)
+	}
+	if value, ok := _u.mutation.RateLimit5h(); ok {
+		_spec.SetField(group.FieldRateLimit5h, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedRateLimit5h(); ok {
+		_spec.AddField(group.FieldRateLimit5h, field.TypeFloat64, value)
+	}
+	if _u.mutation.RateLimit5hCleared() {
+		_spec.ClearField(group.FieldRateLimit5h, field.TypeFloat64)
 	}
 	if value, ok := _u.mutation.DefaultValidityDays(); ok {
 		_spec.SetField(group.FieldDefaultValidityDays, field.TypeInt, value)
@@ -2291,6 +2336,12 @@ func (_u *GroupUpdateOne) ClearDescription() *GroupUpdateOne {
 	return _u
 }
 
+// SetI18n sets the "i18n" field.
+func (_u *GroupUpdateOne) SetI18n(v domain.GroupI18n) *GroupUpdateOne {
+	_u.mutation.SetI18n(v)
+	return _u
+}
+
 // SetRateMultiplier sets the "rate_multiplier" field.
 func (_u *GroupUpdateOne) SetRateMultiplier(v float64) *GroupUpdateOne {
 	_u.mutation.ResetRateMultiplier()
@@ -2509,6 +2560,33 @@ func (_u *GroupUpdateOne) AddMonthlyLimitUsd(v float64) *GroupUpdateOne {
 // ClearMonthlyLimitUsd clears the value of the "monthly_limit_usd" field.
 func (_u *GroupUpdateOne) ClearMonthlyLimitUsd() *GroupUpdateOne {
 	_u.mutation.ClearMonthlyLimitUsd()
+	return _u
+}
+
+// SetRateLimit5h sets the "rate_limit_5h" field.
+func (_u *GroupUpdateOne) SetRateLimit5h(v float64) *GroupUpdateOne {
+	_u.mutation.ResetRateLimit5h()
+	_u.mutation.SetRateLimit5h(v)
+	return _u
+}
+
+// SetNillableRateLimit5h sets the "rate_limit_5h" field if the given value is not nil.
+func (_u *GroupUpdateOne) SetNillableRateLimit5h(v *float64) *GroupUpdateOne {
+	if v != nil {
+		_u.SetRateLimit5h(*v)
+	}
+	return _u
+}
+
+// AddRateLimit5h adds value to the "rate_limit_5h" field.
+func (_u *GroupUpdateOne) AddRateLimit5h(v float64) *GroupUpdateOne {
+	_u.mutation.AddRateLimit5h(v)
+	return _u
+}
+
+// ClearRateLimit5h clears the value of the "rate_limit_5h" field.
+func (_u *GroupUpdateOne) ClearRateLimit5h() *GroupUpdateOne {
+	_u.mutation.ClearRateLimit5h()
 	return _u
 }
 
@@ -3805,6 +3883,9 @@ func (_u *GroupUpdateOne) sqlSave(ctx context.Context) (_node *Group, err error)
 	if _u.mutation.DescriptionCleared() {
 		_spec.ClearField(group.FieldDescription, field.TypeString)
 	}
+	if value, ok := _u.mutation.I18n(); ok {
+		_spec.SetField(group.FieldI18n, field.TypeJSON, value)
+	}
 	if value, ok := _u.mutation.RateMultiplier(); ok {
 		_spec.SetField(group.FieldRateMultiplier, field.TypeFloat64, value)
 	}
@@ -3867,6 +3948,15 @@ func (_u *GroupUpdateOne) sqlSave(ctx context.Context) (_node *Group, err error)
 	}
 	if _u.mutation.MonthlyLimitUsdCleared() {
 		_spec.ClearField(group.FieldMonthlyLimitUsd, field.TypeFloat64)
+	}
+	if value, ok := _u.mutation.RateLimit5h(); ok {
+		_spec.SetField(group.FieldRateLimit5h, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedRateLimit5h(); ok {
+		_spec.AddField(group.FieldRateLimit5h, field.TypeFloat64, value)
+	}
+	if _u.mutation.RateLimit5hCleared() {
+		_spec.ClearField(group.FieldRateLimit5h, field.TypeFloat64)
 	}
 	if value, ok := _u.mutation.DefaultValidityDays(); ok {
 		_spec.SetField(group.FieldDefaultValidityDays, field.TypeInt, value)

@@ -19,6 +19,7 @@ type Group struct {
 	ID             int64
 	Name           string
 	Description    string
+	I18n           GroupI18n // 名称与描述的界面语言译文；缺失的语言沿用 Name/Description
 	Platform       string
 	RateMultiplier float64
 	// 高峰时段倍率：peak_rate_enabled 为 true 且当前时刻处于 [PeakStart, PeakEnd) 时，
@@ -38,6 +39,7 @@ type Group struct {
 	DailyLimitUSD       *float64
 	WeeklyLimitUSD      *float64
 	MonthlyLimitUSD     *float64
+	RateLimit5h         *float64 // 每个订阅的 5h 窗口 USD 限额：nil 不限，0 禁止使用，>0 为上限
 	DefaultValidityDays int
 
 	// 图片生成计费配置（antigravity 和 gemini 平台使用）
@@ -165,6 +167,11 @@ func (g *Group) HasWeeklyLimit() bool {
 
 func (g *Group) HasMonthlyLimit() bool {
 	return g.MonthlyLimitUSD != nil && *g.MonthlyLimitUSD > 0
+}
+
+// HasFiveHourLimit 与日/周/月不同：0 也是生效的限额，表示窗口内禁止使用。
+func (g *Group) HasFiveHourLimit() bool {
+	return g.RateLimit5h != nil
 }
 
 // GetImagePrice 根据 image_size 返回对应的图片生成价格

@@ -25,6 +25,10 @@ type UserSubscription struct {
 	WeeklyUsageUSD  float64
 	MonthlyUsageUSD float64
 
+	// Window5hStart 当前 5h 窗口起点；nil 表示尚无窗口，下一次计费开启新窗口。
+	Window5hStart *time.Time
+	Usage5hUSD    float64
+
 	AssignedBy *int64
 	AssignedAt time.Time
 	Notes      string
@@ -202,6 +206,40 @@ func (s *UserSubscription) MonthlyResetTime() *time.Time {
 	}
 	t := s.windowResetAnchor(*s.MonthlyWindowStart).Add(30 * 24 * time.Hour)
 	return &t
+}
+
+// FiveHourWindowDuration 是订阅 5h 窗口长度。
+const FiveHourWindowDuration = 5 * time.Hour
+
+// fiveHourWindowActiveAt 报告 now 时刻是否存在进行中的 5h 窗口。
+// 窗口不存在或已满 5h 时，下一次计费会开启新窗口，旧用量不再生效。
+func (s *UserSubscription) fiveHourWindowActiveAt(now time.Time) bool {
+	return s.Window5hStart != nil && now.Before(s.Window5hStart.Add(FiveHourWindowDuration))
+}
+
+// EffectiveUsage5hAt 返回 now 时刻 5h 窗口内生效的用量。
+func (s *UserSubscription) EffectiveUsage5hAt(now time.Time) float64 {
+	if !s.fiveHourWindowActiveAt(now) {
+		return 0
+	}
+	return s.Usage5hUSD
+}
+
+// FiveHourResetTimeAt 返回 now 时刻 5h 窗口的重置时间；没有进行中的窗口时返回 nil。
+func (s *UserSubscription) FiveHourResetTimeAt(now time.Time) *time.Time {
+	if !s.fiveHourWindowActiveAt(now) {
+		return nil
+	}
+	t := s.Window5hStart.Add(FiveHourWindowDuration)
+	return &t
+}
+
+// FiveHourLimitReachedAt 报告当前 5h 窗口用量是否已达到分组限额。
+func (s *UserSubscription) FiveHourLimitReachedAt(group *Group, now time.Time) bool {
+	if !group.HasFiveHourLimit() {
+		return false
+	}
+	return s.EffectiveUsage5hAt(now) >= *group.RateLimit5h
 }
 
 func (s *UserSubscription) CheckDailyLimit(group *Group, additionalCost float64) bool {

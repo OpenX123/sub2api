@@ -55,6 +55,8 @@ const (
 	subFieldDailyUsage   = "daily_usage"
 	subFieldWeeklyUsage  = "weekly_usage"
 	subFieldMonthlyUsage = "monthly_usage"
+	subFieldUsage5h      = "usage_5h"
+	subFieldWindow5h     = "window_5h" // 5h 窗口起点 unix 秒；0 表示尚无窗口
 	subFieldVersion      = "version"
 )
 
@@ -84,15 +86,29 @@ var (
 		return 1
 	`)
 
+	// updateSubUsageScript 累加日/周/月用量，并按 Claude 语义滚动 5h 窗口：
+	// 窗口为空或已满 5h 时以本次费用开启新窗口，否则在当前窗口内累加。
+	// 与 DB 侧 incrementUsageBillingSubscription 保持同一口径。
+	//
+	// ARGV: [1]=cost, [2]=ttl_seconds, [3]=now_unix, [4]=window_5h_seconds
 	updateSubUsageScript = redis.NewScript(`
 		local exists = redis.call('EXISTS', KEYS[1])
 		if exists == 0 then
 			return 0
 		end
 		local cost = tonumber(ARGV[1])
+		local now = tonumber(ARGV[3])
+		local win5h = tonumber(ARGV[4])
 		redis.call('HINCRBYFLOAT', KEYS[1], 'daily_usage', cost)
 		redis.call('HINCRBYFLOAT', KEYS[1], 'weekly_usage', cost)
 		redis.call('HINCRBYFLOAT', KEYS[1], 'monthly_usage', cost)
+		local w = tonumber(redis.call('HGET', KEYS[1], 'window_5h') or 0)
+		if w == 0 or (now - w) >= win5h then
+			redis.call('HSET', KEYS[1], 'usage_5h', tostring(cost))
+			redis.call('HSET', KEYS[1], 'window_5h', tostring(now))
+		else
+			redis.call('HINCRBYFLOAT', KEYS[1], 'usage_5h', cost)
+		end
 		redis.call('EXPIRE', KEYS[1], ARGV[2])
 		return 1
 	`)
@@ -212,6 +228,17 @@ func (c *billingCache) parseSubscriptionCache(data map[string]string) (*service.
 		result.MonthlyUsage, _ = strconv.ParseFloat(monthlyStr, 64)
 	}
 
+	if usage5hStr, ok := data[subFieldUsage5h]; ok {
+		result.Usage5h, _ = strconv.ParseFloat(usage5hStr, 64)
+	}
+
+	if window5hStr, ok := data[subFieldWindow5h]; ok {
+		if window5h, err := strconv.ParseInt(window5hStr, 10, 64); err == nil && window5h > 0 {
+			start := time.Unix(window5h, 0)
+			result.Window5hStart = &start
+		}
+	}
+
 	if versionStr, ok := data[subFieldVersion]; ok {
 		result.Version, _ = strconv.ParseInt(versionStr, 10, 64)
 	}
@@ -232,7 +259,12 @@ func (c *billingCache) SetSubscriptionCache(ctx context.Context, userID, groupID
 		subFieldDailyUsage:   data.DailyUsage,
 		subFieldWeeklyUsage:  data.WeeklyUsage,
 		subFieldMonthlyUsage: data.MonthlyUsage,
+		subFieldUsage5h:      data.Usage5h,
+		subFieldWindow5h:     int64(0),
 		subFieldVersion:      data.Version,
+	}
+	if data.Window5hStart != nil {
+		fields[subFieldWindow5h] = data.Window5hStart.Unix()
 	}
 
 	pipe := c.rdb.Pipeline()
@@ -244,7 +276,12 @@ func (c *billingCache) SetSubscriptionCache(ctx context.Context, userID, groupID
 
 func (c *billingCache) UpdateSubscriptionUsage(ctx context.Context, userID, groupID int64, cost float64) error {
 	key := billingSubKey(userID, groupID)
-	_, err := updateSubUsageScript.Run(ctx, c.rdb, []string{key}, cost, int(jitteredTTL().Seconds())).Result()
+	_, err := updateSubUsageScript.Run(ctx, c.rdb, []string{key},
+		cost,
+		int(jitteredTTL().Seconds()),
+		time.Now().Unix(),
+		int(service.FiveHourWindowDuration.Seconds()),
+	).Result()
 	if err != nil && !errors.Is(err, redis.Nil) {
 		log.Printf("Warning: update subscription usage cache failed for user %d group %d: %v", userID, groupID, err)
 		return err

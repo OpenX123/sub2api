@@ -38,6 +38,8 @@ func (r *userSubscriptionRepository) Create(ctx context.Context, sub *service.Us
 		SetDailyUsageUsd(sub.DailyUsageUSD).
 		SetWeeklyUsageUsd(sub.WeeklyUsageUSD).
 		SetMonthlyUsageUsd(sub.MonthlyUsageUSD).
+		SetNillableWindow5hStart(sub.Window5hStart).
+		SetUsage5h(sub.Usage5hUSD).
 		SetNillableAssignedBy(sub.AssignedBy)
 
 	if sub.StartsAt.IsZero() {
@@ -384,7 +386,7 @@ func (r *userSubscriptionRepository) ActivateWindows(ctx context.Context, id int
 	return r.translateConditionalWindowReset(ctx, client, id, n, err)
 }
 
-func (r *userSubscriptionRepository) ResetUsageWindows(ctx context.Context, id int64, resetDaily, resetWeekly, resetMonthly bool, dailyStart, periodicStart time.Time) error {
+func (r *userSubscriptionRepository) ResetUsageWindows(ctx context.Context, id int64, resetDaily, resetWeekly, resetMonthly, resetFiveHour bool, dailyStart, periodicStart time.Time) error {
 	client := clientFromContext(ctx, r.client)
 	update := client.UserSubscription.UpdateOneID(id)
 	if resetDaily {
@@ -395,6 +397,9 @@ func (r *userSubscriptionRepository) ResetUsageWindows(ctx context.Context, id i
 	}
 	if resetMonthly {
 		update.SetMonthlyUsageUsd(0).SetMonthlyWindowStart(periodicStart)
+	}
+	if resetFiveHour {
+		update.SetUsage5h(0).ClearWindow5hStart()
 	}
 	_, err := update.Save(ctx)
 	return translatePersistenceError(err, service.ErrSubscriptionNotFound, nil)
@@ -475,6 +480,8 @@ func (r *userSubscriptionRepository) IncrementUsage(ctx context.Context, id int6
 			daily_usage_usd = us.daily_usage_usd + $1,
 			weekly_usage_usd = us.weekly_usage_usd + $1,
 			monthly_usage_usd = us.monthly_usage_usd + $1,
+			usage_5h = CASE WHEN us.window_5h_start IS NULL OR us.window_5h_start + INTERVAL '5 hours' <= NOW() THEN $1 ELSE us.usage_5h + $1 END,
+			window_5h_start = CASE WHEN us.window_5h_start IS NULL OR us.window_5h_start + INTERVAL '5 hours' <= NOW() THEN NOW() ELSE us.window_5h_start END,
 			updated_at = NOW()
 		FROM groups g
 		WHERE us.id = $2
@@ -653,6 +660,8 @@ func userSubscriptionEntityToServiceWithStatusMapping(m *dbent.UserSubscription,
 		DailyUsageUSD:      m.DailyUsageUsd,
 		WeeklyUsageUSD:     m.WeeklyUsageUsd,
 		MonthlyUsageUSD:    m.MonthlyUsageUsd,
+		Window5hStart:      m.Window5hStart,
+		Usage5hUSD:         m.Usage5h,
 		AssignedBy:         m.AssignedBy,
 		AssignedAt:         m.AssignedAt,
 		Notes:              derefString(m.Notes),

@@ -4,8 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"net/http"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/ctxkey"
@@ -249,11 +252,10 @@ func apiKeyAuthWithSubscription(apiKeyService *service.APIKeyService, subscripti
 				if validateErr != nil {
 					code := "SUBSCRIPTION_INVALID"
 					status := 403
-					if errors.Is(validateErr, service.ErrDailyLimitExceeded) ||
-						errors.Is(validateErr, service.ErrWeeklyLimitExceeded) ||
-						errors.Is(validateErr, service.ErrMonthlyLimitExceeded) {
+					if service.IsSubscriptionUsageLimitError(validateErr) {
 						code = "USAGE_LIMIT_EXCEEDED"
 						status = 429
+						setSubscriptionLimitRetryAfter(c, validateErr)
 					}
 					AbortWithError(c, status, code, validateErr.Error())
 					return
@@ -303,6 +305,20 @@ func hasAPIKeyCredentialInput(c *gin.Context) bool {
 	return c.GetHeader("Authorization") != "" ||
 		c.GetHeader("x-api-key") != "" ||
 		c.GetHeader("x-goog-api-key") != ""
+}
+
+// subscriptionLimitRetryAfterFallback 在限额错误缺少重置时间时使用，与网关计费路径保持一致。
+const subscriptionLimitRetryAfterFallback = 60
+
+// setSubscriptionLimitRetryAfter 按限额错误附带的窗口重置时间设置 Retry-After（秒）。
+func setSubscriptionLimitRetryAfter(c *gin.Context, err error) {
+	seconds := subscriptionLimitRetryAfterFallback
+	if resetAt, ok := service.WindowResetsAt(err); ok {
+		if remaining := time.Until(resetAt).Seconds(); remaining > 0 {
+			seconds = int(math.Ceil(remaining))
+		}
+	}
+	c.Header("Retry-After", strconv.Itoa(seconds))
 }
 
 func abortWithAPIKeyQuotaError(c *gin.Context) {

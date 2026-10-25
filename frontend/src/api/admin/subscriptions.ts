@@ -13,6 +13,46 @@ import type {
   PaginatedResponse
 } from '@/types'
 
+export type SubscriptionBulkAction = 'extend' | 'reset_quota' | 'revoke' | 'restore'
+
+export interface SubscriptionBulkActionRequest {
+  subscription_ids: number[]
+  action: SubscriptionBulkAction
+  days?: number
+  daily?: boolean
+  weekly?: boolean
+  monthly?: boolean
+  five_hour?: boolean
+}
+
+export interface SubscriptionBulkActionResult {
+  success_count: number
+  failed_count: number
+  results: Array<{ subscription_id: number; success: boolean; error?: string }>
+}
+
+export interface BulkAssignSubscriptionResult {
+  success_count: number
+  created_count: number
+  reused_count: number
+  failed_count: number
+  subscriptions: UserSubscription[]
+  errors: string[]
+  statuses?: Record<string, 'created' | 'reused' | 'failed'>
+}
+
+export async function bulkAction(
+  request: SubscriptionBulkActionRequest,
+  idempotencyKey: string
+): Promise<SubscriptionBulkActionResult> {
+  const { data } = await apiClient.post<SubscriptionBulkActionResult>(
+    '/admin/subscriptions/bulk-action',
+    request,
+    { headers: { 'Idempotency-Key': idempotencyKey } }
+  )
+  return data
+}
+
 /**
  * List all subscriptions with pagination
  * @param page - Page number (default: 1)
@@ -82,12 +122,12 @@ export async function assign(request: AssignSubscriptionRequest): Promise<UserSu
 /**
  * Bulk assign subscriptions to multiple users
  * @param request - Bulk assignment request
- * @returns Created subscriptions
+ * @returns Per-user assignment outcomes and created or reused subscriptions
  */
 export async function bulkAssign(
   request: BulkAssignSubscriptionRequest
-): Promise<UserSubscription[]> {
-  const { data } = await apiClient.post<UserSubscription[]>(
+): Promise<BulkAssignSubscriptionResult> {
+  const { data } = await apiClient.post<BulkAssignSubscriptionResult>(
     '/admin/subscriptions/bulk-assign',
     request
   )
@@ -132,14 +172,14 @@ export async function restore(id: number): Promise<UserSubscription> {
 }
 
 /**
- * Reset daily, weekly, and/or monthly usage quota for a subscription
+ * Reset daily, weekly, monthly, and/or 5h usage quota for a subscription
  * @param id - Subscription ID
  * @param options - Which windows to reset
  * @returns Updated subscription
  */
 export async function resetQuota(
   id: number,
-  options: { daily: boolean; weekly: boolean; monthly: boolean }
+  options: { daily: boolean; weekly: boolean; monthly: boolean; five_hour?: boolean }
 ): Promise<UserSubscription> {
   const { data } = await apiClient.post<UserSubscription>(
     `/admin/subscriptions/${id}/reset-quota`,
@@ -196,6 +236,7 @@ export const subscriptionsAPI = {
   getProgress,
   assign,
   bulkAssign,
+  bulkAction,
   extend,
   revoke,
   restore,

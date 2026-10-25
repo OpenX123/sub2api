@@ -187,16 +187,17 @@ func (r *usageBillingRepository) applyUsageBillingEffects(ctx context.Context, t
 		result.BalanceOverdrafted = !sufficient
 	}
 
+	// Key 已不存在时跳过其自身的额度/限速计数，其余结算项不受影响。
 	if cmd.APIKeyQuotaCost > 0 {
 		exhausted, err := incrementUsageBillingAPIKeyQuota(ctx, tx, cmd.APIKeyID, cmd.APIKeyQuotaCost)
-		if err != nil {
+		if err != nil && !errors.Is(err, service.ErrAPIKeyNotFound) {
 			return err
 		}
 		result.APIKeyQuotaExhausted = exhausted
 	}
 
 	if cmd.APIKeyRateLimitCost > 0 {
-		if err := incrementUsageBillingAPIKeyRateLimit(ctx, tx, cmd.APIKeyID, cmd.APIKeyRateLimitCost); err != nil {
+		if err := incrementUsageBillingAPIKeyRateLimit(ctx, tx, cmd.APIKeyID, cmd.APIKeyRateLimitCost); err != nil && !errors.Is(err, service.ErrAPIKeyNotFound) {
 			return err
 		}
 	}
@@ -219,6 +220,9 @@ func incrementUsageBillingSubscription(ctx context.Context, tx *sql.Tx, subscrip
 			daily_usage_usd = us.daily_usage_usd + $1,
 			weekly_usage_usd = us.weekly_usage_usd + $1,
 			monthly_usage_usd = us.monthly_usage_usd + $1,
+			-- 5h 窗口按 Claude 语义滚动：窗口为空或已满 5h 时以本次费用开启新窗口。
+			usage_5h = CASE WHEN us.window_5h_start IS NULL OR us.window_5h_start + INTERVAL '5 hours' <= NOW() THEN $1 ELSE us.usage_5h + $1 END,
+			window_5h_start = CASE WHEN us.window_5h_start IS NULL OR us.window_5h_start + INTERVAL '5 hours' <= NOW() THEN NOW() ELSE us.window_5h_start END,
 			updated_at = NOW()
 		FROM groups g
 		WHERE us.id = $2

@@ -100,6 +100,51 @@
               }}</span>
             </div>
 
+            <!-- 5h Window Usage（0 表示禁止使用，因此按 != null 判断） -->
+            <div v-if="subscription.group?.rate_limit_5h != null" class="space-y-2">
+              <div class="flex items-center justify-between">
+                <span class="text-sm font-medium text-gray-700 dark:text-gray-300">
+                  {{ t('userSubscriptions.fiveHour') }}
+                </span>
+                <span class="text-sm text-gray-500 dark:text-dark-400">
+                  ${{ (subscription.usage_5h_usd || 0).toFixed(2) }} / ${{
+                    subscription.group.rate_limit_5h.toFixed(2)
+                  }}
+                </span>
+              </div>
+              <div class="relative h-2 overflow-hidden rounded-full bg-gray-200 dark:bg-dark-600">
+                <div
+                  class="absolute inset-y-0 left-0 rounded-full transition-all duration-300"
+                  :class="
+                    subscription.group.rate_limit_5h === 0
+                      ? 'bg-red-500'
+                      : getProgressBarClass(
+                          subscription.usage_5h_usd,
+                          subscription.group.rate_limit_5h
+                        )
+                  "
+                  :style="{
+                    width:
+                      subscription.group.rate_limit_5h === 0
+                        ? '100%'
+                        : getProgressWidth(
+                            subscription.usage_5h_usd,
+                            subscription.group.rate_limit_5h
+                          )
+                  }"
+                ></div>
+              </div>
+              <p class="text-xs text-gray-500 dark:text-dark-400">
+                {{
+                  subscription.window_5h_start
+                    ? t('userSubscriptions.resetIn', {
+                        time: formatResetTime(subscription.window_5h_start, 5)
+                      })
+                    : t('userSubscriptions.fiveHourWindowHint')
+                }}
+              </p>
+            </div>
+
             <!-- Daily Usage -->
             <div v-if="subscription.group?.daily_limit_usd" class="space-y-2">
               <div class="flex items-center justify-between">
@@ -224,7 +269,8 @@
               v-if="
                 !subscription.group?.daily_limit_usd &&
                 !subscription.group?.weekly_limit_usd &&
-                !subscription.group?.monthly_limit_usd
+                !subscription.group?.monthly_limit_usd &&
+                subscription.group?.rate_limit_5h == null
               "
               class="flex items-center justify-center rounded-xl bg-gradient-to-r from-emerald-50 to-teal-50 py-6 dark:from-emerald-900/20 dark:to-teal-900/20"
             >

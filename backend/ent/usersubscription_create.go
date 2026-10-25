@@ -189,6 +189,34 @@ func (_c *UserSubscriptionCreate) SetNillableMonthlyUsageUsd(v *float64) *UserSu
 	return _c
 }
 
+// SetUsage5h sets the "usage_5h" field.
+func (_c *UserSubscriptionCreate) SetUsage5h(v float64) *UserSubscriptionCreate {
+	_c.mutation.SetUsage5h(v)
+	return _c
+}
+
+// SetNillableUsage5h sets the "usage_5h" field if the given value is not nil.
+func (_c *UserSubscriptionCreate) SetNillableUsage5h(v *float64) *UserSubscriptionCreate {
+	if v != nil {
+		_c.SetUsage5h(*v)
+	}
+	return _c
+}
+
+// SetWindow5hStart sets the "window_5h_start" field.
+func (_c *UserSubscriptionCreate) SetWindow5hStart(v time.Time) *UserSubscriptionCreate {
+	_c.mutation.SetWindow5hStart(v)
+	return _c
+}
+
+// SetNillableWindow5hStart sets the "window_5h_start" field if the given value is not nil.
+func (_c *UserSubscriptionCreate) SetNillableWindow5hStart(v *time.Time) *UserSubscriptionCreate {
+	if v != nil {
+		_c.SetWindow5hStart(*v)
+	}
+	return _c
+}
+
 // SetAssignedBy sets the "assigned_by" field.
 func (_c *UserSubscriptionCreate) SetAssignedBy(v int64) *UserSubscriptionCreate {
 	_c.mutation.SetAssignedBy(v)
@@ -342,6 +370,10 @@ func (_c *UserSubscriptionCreate) defaults() error {
 		v := usersubscription.DefaultMonthlyUsageUsd
 		_c.mutation.SetMonthlyUsageUsd(v)
 	}
+	if _, ok := _c.mutation.Usage5h(); !ok {
+		v := usersubscription.DefaultUsage5h
+		_c.mutation.SetUsage5h(v)
+	}
 	if _, ok := _c.mutation.AssignedAt(); !ok {
 		if usersubscription.DefaultAssignedAt == nil {
 			return fmt.Errorf("ent: uninitialized usersubscription.DefaultAssignedAt (forgotten import ent/runtime?)")
@@ -388,6 +420,9 @@ func (_c *UserSubscriptionCreate) check() error {
 	}
 	if _, ok := _c.mutation.MonthlyUsageUsd(); !ok {
 		return &ValidationError{Name: "monthly_usage_usd", err: errors.New(`ent: missing required field "UserSubscription.monthly_usage_usd"`)}
+	}
+	if _, ok := _c.mutation.Usage5h(); !ok {
+		return &ValidationError{Name: "usage_5h", err: errors.New(`ent: missing required field "UserSubscription.usage_5h"`)}
 	}
 	if _, ok := _c.mutation.AssignedAt(); !ok {
 		return &ValidationError{Name: "assigned_at", err: errors.New(`ent: missing required field "UserSubscription.assigned_at"`)}
@@ -472,6 +507,14 @@ func (_c *UserSubscriptionCreate) createSpec() (*UserSubscription, *sqlgraph.Cre
 	if value, ok := _c.mutation.MonthlyUsageUsd(); ok {
 		_spec.SetField(usersubscription.FieldMonthlyUsageUsd, field.TypeFloat64, value)
 		_node.MonthlyUsageUsd = value
+	}
+	if value, ok := _c.mutation.Usage5h(); ok {
+		_spec.SetField(usersubscription.FieldUsage5h, field.TypeFloat64, value)
+		_node.Usage5h = value
+	}
+	if value, ok := _c.mutation.Window5hStart(); ok {
+		_spec.SetField(usersubscription.FieldWindow5hStart, field.TypeTime, value)
+		_node.Window5hStart = &value
 	}
 	if value, ok := _c.mutation.AssignedAt(); ok {
 		_spec.SetField(usersubscription.FieldAssignedAt, field.TypeTime, value)
@@ -798,6 +841,42 @@ func (u *UserSubscriptionUpsert) AddMonthlyUsageUsd(v float64) *UserSubscription
 	return u
 }
 
+// SetUsage5h sets the "usage_5h" field.
+func (u *UserSubscriptionUpsert) SetUsage5h(v float64) *UserSubscriptionUpsert {
+	u.Set(usersubscription.FieldUsage5h, v)
+	return u
+}
+
+// UpdateUsage5h sets the "usage_5h" field to the value that was provided on create.
+func (u *UserSubscriptionUpsert) UpdateUsage5h() *UserSubscriptionUpsert {
+	u.SetExcluded(usersubscription.FieldUsage5h)
+	return u
+}
+
+// AddUsage5h adds v to the "usage_5h" field.
+func (u *UserSubscriptionUpsert) AddUsage5h(v float64) *UserSubscriptionUpsert {
+	u.Add(usersubscription.FieldUsage5h, v)
+	return u
+}
+
+// SetWindow5hStart sets the "window_5h_start" field.
+func (u *UserSubscriptionUpsert) SetWindow5hStart(v time.Time) *UserSubscriptionUpsert {
+	u.Set(usersubscription.FieldWindow5hStart, v)
+	return u
+}
+
+// UpdateWindow5hStart sets the "window_5h_start" field to the value that was provided on create.
+func (u *UserSubscriptionUpsert) UpdateWindow5hStart() *UserSubscriptionUpsert {
+	u.SetExcluded(usersubscription.FieldWindow5hStart)
+	return u
+}
+
+// ClearWindow5hStart clears the value of the "window_5h_start" field.
+func (u *UserSubscriptionUpsert) ClearWindow5hStart() *UserSubscriptionUpsert {
+	u.SetNull(usersubscription.FieldWindow5hStart)
+	return u
+}
+
 // SetAssignedBy sets the "assigned_by" field.
 func (u *UserSubscriptionUpsert) SetAssignedBy(v int64) *UserSubscriptionUpsert {
 	u.Set(usersubscription.FieldAssignedBy, v)
@@ -1119,6 +1198,48 @@ func (u *UserSubscriptionUpsertOne) AddMonthlyUsageUsd(v float64) *UserSubscript
 func (u *UserSubscriptionUpsertOne) UpdateMonthlyUsageUsd() *UserSubscriptionUpsertOne {
 	return u.Update(func(s *UserSubscriptionUpsert) {
 		s.UpdateMonthlyUsageUsd()
+	})
+}
+
+// SetUsage5h sets the "usage_5h" field.
+func (u *UserSubscriptionUpsertOne) SetUsage5h(v float64) *UserSubscriptionUpsertOne {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.SetUsage5h(v)
+	})
+}
+
+// AddUsage5h adds v to the "usage_5h" field.
+func (u *UserSubscriptionUpsertOne) AddUsage5h(v float64) *UserSubscriptionUpsertOne {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.AddUsage5h(v)
+	})
+}
+
+// UpdateUsage5h sets the "usage_5h" field to the value that was provided on create.
+func (u *UserSubscriptionUpsertOne) UpdateUsage5h() *UserSubscriptionUpsertOne {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.UpdateUsage5h()
+	})
+}
+
+// SetWindow5hStart sets the "window_5h_start" field.
+func (u *UserSubscriptionUpsertOne) SetWindow5hStart(v time.Time) *UserSubscriptionUpsertOne {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.SetWindow5hStart(v)
+	})
+}
+
+// UpdateWindow5hStart sets the "window_5h_start" field to the value that was provided on create.
+func (u *UserSubscriptionUpsertOne) UpdateWindow5hStart() *UserSubscriptionUpsertOne {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.UpdateWindow5hStart()
+	})
+}
+
+// ClearWindow5hStart clears the value of the "window_5h_start" field.
+func (u *UserSubscriptionUpsertOne) ClearWindow5hStart() *UserSubscriptionUpsertOne {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.ClearWindow5hStart()
 	})
 }
 
@@ -1617,6 +1738,48 @@ func (u *UserSubscriptionUpsertBulk) AddMonthlyUsageUsd(v float64) *UserSubscrip
 func (u *UserSubscriptionUpsertBulk) UpdateMonthlyUsageUsd() *UserSubscriptionUpsertBulk {
 	return u.Update(func(s *UserSubscriptionUpsert) {
 		s.UpdateMonthlyUsageUsd()
+	})
+}
+
+// SetUsage5h sets the "usage_5h" field.
+func (u *UserSubscriptionUpsertBulk) SetUsage5h(v float64) *UserSubscriptionUpsertBulk {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.SetUsage5h(v)
+	})
+}
+
+// AddUsage5h adds v to the "usage_5h" field.
+func (u *UserSubscriptionUpsertBulk) AddUsage5h(v float64) *UserSubscriptionUpsertBulk {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.AddUsage5h(v)
+	})
+}
+
+// UpdateUsage5h sets the "usage_5h" field to the value that was provided on create.
+func (u *UserSubscriptionUpsertBulk) UpdateUsage5h() *UserSubscriptionUpsertBulk {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.UpdateUsage5h()
+	})
+}
+
+// SetWindow5hStart sets the "window_5h_start" field.
+func (u *UserSubscriptionUpsertBulk) SetWindow5hStart(v time.Time) *UserSubscriptionUpsertBulk {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.SetWindow5hStart(v)
+	})
+}
+
+// UpdateWindow5hStart sets the "window_5h_start" field to the value that was provided on create.
+func (u *UserSubscriptionUpsertBulk) UpdateWindow5hStart() *UserSubscriptionUpsertBulk {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.UpdateWindow5hStart()
+	})
+}
+
+// ClearWindow5hStart clears the value of the "window_5h_start" field.
+func (u *UserSubscriptionUpsertBulk) ClearWindow5hStart() *UserSubscriptionUpsertBulk {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.ClearWindow5hStart()
 	})
 }
 
