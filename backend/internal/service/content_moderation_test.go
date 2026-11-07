@@ -157,6 +157,34 @@ type contentModerationTestHashCache struct {
 	deleted       []string
 	hasResult     bool
 	hasResultUsed bool
+	safeResults   map[string]*ContentModerationCachedResult
+	safeTTLs      map[string]time.Duration
+	safeGets      int
+	safeSets      int
+	safeGetErr    error
+}
+
+func (c *contentModerationTestHashCache) GetSafeModerationResult(ctx context.Context, key string) (*ContentModerationCachedResult, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.safeGets++
+	if c.safeGetErr != nil {
+		return nil, c.safeGetErr
+	}
+	return c.safeResults[key], nil
+}
+
+func (c *contentModerationTestHashCache) SetSafeModerationResult(ctx context.Context, key string, result *ContentModerationCachedResult, ttl time.Duration) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.safeResults == nil {
+		c.safeResults = map[string]*ContentModerationCachedResult{}
+		c.safeTTLs = map[string]time.Duration{}
+	}
+	c.safeSets++
+	c.safeResults[key] = result
+	c.safeTTLs[key] = ttl
+	return nil
 }
 
 type contentModerationTestUserRepo struct {

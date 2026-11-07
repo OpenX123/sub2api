@@ -41,6 +41,8 @@ type ContentModerationEngineMeta struct {
 	Model         string `json:"model"`
 	RulesVersion  string `json:"rules_version"`
 	SkippedImages int    `json:"skipped_images"`
+	// CacheHit marks a verdict served from the safe-result cache instead of the upstream API.
+	CacheHit bool `json:"cache_hit,omitempty"`
 }
 
 func moderationEngine(engine string) string {
