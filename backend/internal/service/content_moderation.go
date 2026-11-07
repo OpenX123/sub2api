@@ -79,17 +79,20 @@ const (
 	defaultContentModerationNonHitRetentionDays  = 3
 	maxContentModerationRetentionDays            = 3650
 	maxContentModerationNonHitRetentionDays      = 3
-	contentModerationKeyRateLimitFreezeDuration  = time.Minute
-	contentModerationKeyAuthFreezeDuration       = 10 * time.Minute
-	contentModerationKeyHTTPErrorFreezeDuration  = 10 * time.Second
-	maxContentModerationInputImages              = 1
-	maxContentModerationTestImages               = maxContentModerationInputImages
-	maxContentModerationTestImageBytes           = 8 * 1024 * 1024
-	maxContentModerationTestImageDataURLBytes    = 12 * 1024 * 1024
-	maxContentModerationBlockedKeywords          = 10000
-	maxContentModerationBlockedKeywordRunes      = 200
-	maxContentModerationModelFilterModels        = 1000
-	maxContentModerationModelFilterRunes         = 200
+	// SafeResultCacheTTLSeconds: 0 = default, negative = disabled.
+	defaultContentModerationSafeResultCacheTTLSeconds = 3600
+	maxContentModerationSafeResultCacheTTLSeconds     = 86400
+	contentModerationKeyRateLimitFreezeDuration       = time.Minute
+	contentModerationKeyAuthFreezeDuration            = 10 * time.Minute
+	contentModerationKeyHTTPErrorFreezeDuration       = 10 * time.Second
+	maxContentModerationInputImages                   = 1
+	maxContentModerationTestImages                    = maxContentModerationInputImages
+	maxContentModerationTestImageBytes                = 8 * 1024 * 1024
+	maxContentModerationTestImageDataURLBytes         = 12 * 1024 * 1024
+	maxContentModerationBlockedKeywords               = 10000
+	maxContentModerationBlockedKeywordRunes           = 200
+	maxContentModerationModelFilterModels             = 1000
+	maxContentModerationModelFilterRunes              = 200
 
 	contentModerationCleanupInterval = 24 * time.Hour
 	contentModerationCleanupTimeout  = 30 * time.Minute
@@ -147,30 +150,33 @@ type ContentModerationConfig struct {
 	BaseURL  string                         `json:"base_url"`
 	Model    string                         `json:"model"`
 	// ProxyID 指定审计请求使用的代理服务器（IP管理-代理服务器），nil 表示直连。
-	ProxyID              *int64                       `json:"proxy_id,omitempty"`
-	APIKey               string                       `json:"api_key,omitempty"`
-	APIKeys              []string                     `json:"api_keys,omitempty"`
-	TimeoutMS            int                          `json:"timeout_ms"`
-	SampleRate           int                          `json:"sample_rate"`
-	AllGroups            bool                         `json:"all_groups"`
-	GroupIDs             []int64                      `json:"group_ids"`
-	RecordNonHits        bool                         `json:"record_non_hits"`
-	Thresholds           map[string]float64           `json:"thresholds"`
-	WorkerCount          int                          `json:"worker_count"`
-	QueueSize            int                          `json:"queue_size"`
-	BlockStatus          int                          `json:"block_status"`
-	BlockMessage         string                       `json:"block_message"`
-	EmailOnHit           bool                         `json:"email_on_hit"`
-	AutoBanEnabled       bool                         `json:"auto_ban_enabled"`
-	BanThreshold         int                          `json:"ban_threshold"`
-	ViolationWindowHours int                          `json:"violation_window_hours"`
-	RetryCount           int                          `json:"retry_count"`
-	HitRetentionDays     int                          `json:"hit_retention_days"`
-	NonHitRetentionDays  int                          `json:"non_hit_retention_days"`
-	PreHashCheckEnabled  bool                         `json:"pre_hash_check_enabled"`
-	BlockedKeywords      []string                     `json:"blocked_keywords"`
-	KeywordBlockingMode  string                       `json:"keyword_blocking_mode"`
-	ModelFilter          ContentModerationModelFilter `json:"model_filter"`
+	ProxyID              *int64             `json:"proxy_id,omitempty"`
+	APIKey               string             `json:"api_key,omitempty"`
+	APIKeys              []string           `json:"api_keys,omitempty"`
+	TimeoutMS            int                `json:"timeout_ms"`
+	SampleRate           int                `json:"sample_rate"`
+	AllGroups            bool               `json:"all_groups"`
+	GroupIDs             []int64            `json:"group_ids"`
+	RecordNonHits        bool               `json:"record_non_hits"`
+	Thresholds           map[string]float64 `json:"thresholds"`
+	WorkerCount          int                `json:"worker_count"`
+	QueueSize            int                `json:"queue_size"`
+	BlockStatus          int                `json:"block_status"`
+	BlockMessage         string             `json:"block_message"`
+	EmailOnHit           bool               `json:"email_on_hit"`
+	AutoBanEnabled       bool               `json:"auto_ban_enabled"`
+	BanThreshold         int                `json:"ban_threshold"`
+	ViolationWindowHours int                `json:"violation_window_hours"`
+	RetryCount           int                `json:"retry_count"`
+	HitRetentionDays     int                `json:"hit_retention_days"`
+	NonHitRetentionDays  int                `json:"non_hit_retention_days"`
+	PreHashCheckEnabled  bool               `json:"pre_hash_check_enabled"`
+	// SafeResultCacheTTLSeconds 缓存“判定安全”的审计分数，相同输入在 TTL 内不再调用审计 API。
+	// 0 使用默认值，负数关闭；旧配置 JSON 无此字段时为 0（默认开启）。
+	SafeResultCacheTTLSeconds int                          `json:"safe_result_cache_ttl_seconds"`
+	BlockedKeywords           []string                     `json:"blocked_keywords"`
+	KeywordBlockingMode       string                       `json:"keyword_blocking_mode"`
+	ModelFilter               ContentModerationModelFilter `json:"model_filter"`
 	// CyberPolicyExcludeFromBanCount 为 true 时，cyber_policy 命中不参与自动封号计数：
 	// 当次不判定封号，且历史 cyber 行在 CountFlaggedByUserSince 中被排除。
 	// 默认 false（计入，与历史行为一致；旧配置 JSON 无此字段时反序列化为 false）。
@@ -208,6 +214,7 @@ type ContentModerationConfigView struct {
 	HitRetentionDays               int                                     `json:"hit_retention_days"`
 	NonHitRetentionDays            int                                     `json:"non_hit_retention_days"`
 	PreHashCheckEnabled            bool                                    `json:"pre_hash_check_enabled"`
+	SafeResultCacheTTLSeconds      int                                     `json:"safe_result_cache_ttl_seconds"`
 	BlockedKeywords                []string                                `json:"blocked_keywords"`
 	KeywordBlockingMode            string                                  `json:"keyword_blocking_mode"`
 	ModelFilter                    ContentModerationModelFilter            `json:"model_filter"`
@@ -305,6 +312,7 @@ type UpdateContentModerationConfigInput struct {
 	HitRetentionDays               *int                          `json:"hit_retention_days"`
 	NonHitRetentionDays            *int                          `json:"non_hit_retention_days"`
 	PreHashCheckEnabled            *bool                         `json:"pre_hash_check_enabled"`
+	SafeResultCacheTTLSeconds      *int                          `json:"safe_result_cache_ttl_seconds"`
 	BlockedKeywords                *[]string                     `json:"blocked_keywords"`
 	KeywordBlockingMode            *string                       `json:"keyword_blocking_mode"`
 	ModelFilter                    *ContentModerationModelFilter `json:"model_filter"`
@@ -508,6 +516,18 @@ type ContentModerationHashCache interface {
 	DeleteFlaggedInputHash(ctx context.Context, inputHash string) (bool, error)
 	ClearFlaggedInputHashes(ctx context.Context) (int64, error)
 	CountFlaggedInputHashes(ctx context.Context) (int64, error)
+	// GetSafeModerationResult returns (nil, nil) on a cache miss.
+	GetSafeModerationResult(ctx context.Context, key string) (*ContentModerationCachedResult, error)
+	SetSafeModerationResult(ctx context.Context, key string, result *ContentModerationCachedResult, ttl time.Duration) error
+}
+
+// ContentModerationCachedResult is the upstream verdict of an input that was
+// below every threshold when it was audited. Scores are re-evaluated against
+// the current thresholds on every hit, so lowering a threshold can never let a
+// cached input bypass a fresh audit.
+type ContentModerationCachedResult struct {
+	CategoryScores map[string]float64           `json:"category_scores"`
+	EngineMeta     *ContentModerationEngineMeta `json:"engine_meta,omitempty"`
 }
 
 type ContentModerationService struct {
@@ -677,6 +697,9 @@ func (s *ContentModerationService) UpdateConfig(ctx context.Context, input Updat
 	}
 	if input.PreHashCheckEnabled != nil {
 		cfg.PreHashCheckEnabled = *input.PreHashCheckEnabled
+	}
+	if input.SafeResultCacheTTLSeconds != nil {
+		cfg.SafeResultCacheTTLSeconds = *input.SafeResultCacheTTLSeconds
 	}
 	if input.BlockedKeywords != nil {
 		cfg.BlockedKeywords = normalizeBlockedKeywords(*input.BlockedKeywords)
@@ -1080,7 +1103,13 @@ func (s *ContentModerationService) checkSync(ctx context.Context, input ContentM
 		defer s.preBlockActive.Add(-1)
 	}
 	start := time.Now()
-	result, err := s.callModeration(ctx, cfg, content.ModerationInput(), trackPreBlock)
+	safeCacheKey := safeResultCacheKey(cfg, hashText)
+	result := s.lookupSafeModerationResult(ctx, cfg, safeCacheKey)
+	cacheHit := result != nil
+	var err error
+	if !cacheHit {
+		result, err = s.callModeration(ctx, cfg, content.ModerationInput(), trackPreBlock)
+	}
 	latency := int(time.Since(start).Milliseconds())
 	if err != nil {
 		if trackPreBlock {
@@ -1110,6 +1139,9 @@ func (s *ContentModerationService) checkSync(ctx context.Context, input ContentM
 	}
 
 	flagged, highestCategory, highestScore := evaluateModerationScores(result.CategoryScores, cfg.Thresholds)
+	if !cacheHit && !flagged {
+		s.storeSafeModerationResult(ctx, cfg, safeCacheKey, result)
+	}
 	action := ContentModerationActionAllow
 	blocked := false
 	if allowBlock && !input.riskControlLogOnly && flagged && cfg.Mode == ContentModerationModePreBlock {
@@ -1134,6 +1166,7 @@ func (s *ContentModerationService) checkSync(ctx context.Context, input ContentM
 		"highest_category", highestCategory,
 		"highest_score", highestScore,
 		"latency_ms", latency,
+		"cache_hit", cacheHit,
 		"queue_delay_ms", queueDelay)
 	if flagged || cfg.RecordNonHits {
 		log := s.buildLog(input, cfg, action, flagged, highestCategory, highestScore, result.CategoryScores, content.ExcerptText(), &latency, queueDelay, "")
@@ -2267,6 +2300,7 @@ func (cfg *ContentModerationConfig) normalize() {
 	if cfg.NonHitRetentionDays > maxContentModerationNonHitRetentionDays {
 		cfg.NonHitRetentionDays = maxContentModerationNonHitRetentionDays
 	}
+	cfg.SafeResultCacheTTLSeconds = normalizeSafeResultCacheTTLSeconds(cfg.SafeResultCacheTTLSeconds)
 	cfg.GroupIDs = normalizeInt64IDs(cfg.GroupIDs)
 	cfg.Thresholds = mergeContentModerationThresholds(ContentModerationDefaultThresholds(), cfg.Thresholds)
 	cfg.BlockedKeywords = normalizeBlockedKeywords(cfg.BlockedKeywords)
@@ -2500,6 +2534,7 @@ func (s *ContentModerationService) configView(cfg *ContentModerationConfig) *Con
 		HitRetentionDays:               cfg.HitRetentionDays,
 		NonHitRetentionDays:            cfg.NonHitRetentionDays,
 		PreHashCheckEnabled:            cfg.PreHashCheckEnabled,
+		SafeResultCacheTTLSeconds:      cfg.SafeResultCacheTTLSeconds,
 		BlockedKeywords:                append([]string(nil), cfg.BlockedKeywords...),
 		KeywordBlockingMode:            cfg.KeywordBlockingMode,
 		ModelFilter:                    cloneContentModerationModelFilter(cfg.ModelFilter),

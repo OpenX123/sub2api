@@ -2,13 +2,50 @@ package repository
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"strings"
+	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/redis/go-redis/v9"
 )
 
-const contentModerationFlaggedHashSetKey = "content_moderation:flagged_hashes"
+const (
+	contentModerationFlaggedHashSetKey   = "content_moderation:flagged_hashes"
+	contentModerationSafeResultKeyPrefix = "content_moderation:safe_result:"
+)
+
+func (c *contentModerationHashCache) GetSafeModerationResult(ctx context.Context, key string) (*service.ContentModerationCachedResult, error) {
+	key = strings.TrimSpace(key)
+	if c == nil || c.rdb == nil || key == "" {
+		return nil, nil
+	}
+	raw, err := c.rdb.Get(ctx, contentModerationSafeResultKeyPrefix+key).Bytes()
+	if errors.Is(err, redis.Nil) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	var result service.ContentModerationCachedResult
+	if err := json.Unmarshal(raw, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+func (c *contentModerationHashCache) SetSafeModerationResult(ctx context.Context, key string, result *service.ContentModerationCachedResult, ttl time.Duration) error {
+	key = strings.TrimSpace(key)
+	if c == nil || c.rdb == nil || key == "" || result == nil || ttl <= 0 {
+		return nil
+	}
+	raw, err := json.Marshal(result)
+	if err != nil {
+		return err
+	}
+	return c.rdb.Set(ctx, contentModerationSafeResultKeyPrefix+key, raw, ttl).Err()
+}
 
 type contentModerationHashCache struct {
 	rdb *redis.Client
