@@ -722,6 +722,12 @@ describe('UseKeyModal', () => {
     }
     expect(models['gpt-5.6'].name).toBe('GPT-5.6 (Sol)')
     expect(models['gpt-6.1-sol'].variants).not.toHaveProperty('none')
+    expect(models['gpt-6.1-terra']).toEqual({
+      name: 'GPT-6.1 Terra',
+      limit: { context: 1050000, output: 128000 },
+      options: { store: false },
+      variants: { none: {}, low: {}, medium: {}, high: {}, xhigh: {}, max: {} }
+    })
     expect(models['gpt-6-sol'].variants).toHaveProperty('none')
     expect(models['gpt-6-luna'].limit).toEqual({ context: 1050000, output: 128000 })
     expect(models['gpt-6']).toEqual({
@@ -756,6 +762,9 @@ describe('UseKeyModal', () => {
     expect(models['claude-sonnet-5-5'].options).toEqual({ thinking: { type: 'adaptive' }, effort: 'high' })
     expect(models['claude-sonnet-5-5'].variants.xhigh.effort).toBe('xhigh')
     expect(models['claude-sonnet-5-5'].variants).not.toHaveProperty('none')
+    expect(models['claude-haiku-5-5'].limit).toEqual({ context: 1000000, output: 128000 })
+    expect(models['claude-haiku-5-5'].options).toEqual({ thinking: { type: 'adaptive' }, effort: 'medium' })
+    expect(models['claude-haiku-5-5'].variants.max.effort).toBe('max')
   })
 
   it('renders Claude Fable 5 OpenCode config with adaptive thinking', async () => {

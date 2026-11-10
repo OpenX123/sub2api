@@ -11,7 +11,11 @@ import (
 	"math"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
+
+	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
+	"golang.org/x/sync/singleflight"
 )
 
 // IsRegistrationEnabled 检查是否开放注册
@@ -566,7 +570,7 @@ func (s *SettingService) GetIdentityPatchPrompt(ctx context.Context) string {
 	return value
 }
 
-// GenerateAdminAPIKey 生成新的管理员 API Key
+// GenerateAdminAPIKey 轮换已存在的旧版管理员 API Key，不允许新建。
 func (s *SettingService) GenerateAdminAPIKey(ctx context.Context) (string, error) {
 	// 生成 32 字节随机数 = 64 位十六进制字符
 	bytes := make([]byte, 32)
@@ -576,9 +580,19 @@ func (s *SettingService) GenerateAdminAPIKey(ctx context.Context) (string, error
 
 	key := AdminAPIKeyPrefix + hex.EncodeToString(bytes)
 
-	// 存储到 settings 表
-	if err := s.settingRepo.Set(ctx, SettingKeyAdminAPIKey, key); err != nil {
+	// 旧版密钥只能轮换已有记录。使用条件 UPDATE，避免删除与轮换并发时被 upsert 重新创建。
+	repo, ok := s.settingRepo.(interface {
+		ReplaceExistingAdminAPIKey(context.Context, string) (bool, error)
+	})
+	if !ok {
+		return "", infraerrors.InternalServer("ADMIN_API_KEY_REPOSITORY_UNSUPPORTED", "旧版管理员密钥存储不支持原子轮换")
+	}
+	exists, err := repo.ReplaceExistingAdminAPIKey(ctx, key)
+	if err != nil {
 		return "", fmt.Errorf("save admin api key: %w", err)
+	}
+	if !exists {
+		return "", infraerrors.Forbidden("ADMIN_API_KEY_NOT_FOUND", "旧版密钥已停止新建，请创建权限管理密钥")
 	}
 
 	return key, nil
@@ -888,7 +902,65 @@ func (s *SettingService) SetRectifierSettings(ctx context.Context, settings *Rec
 		return fmt.Errorf("marshal rectifier settings: %w", err)
 	}
 
-	return s.settingRepo.Set(ctx, SettingKeyRectifierSettings, string(data))
+	if err := s.settingRepo.Set(ctx, SettingKeyRectifierSettings, string(data)); err != nil {
+		return err
+	}
+	// 立即刷新本进程的透传开关缓存，避免保存后最长 60s 才生效
+	thinkingBlockPassthroughSF.Forget("thinking_block_passthrough")
+	thinkingBlockPassthroughCache.Store(&cachedThinkingBlockPassthrough{
+		value:     settings.ThinkingBlockPassthrough,
+		expiresAt: time.Now().Add(thinkingBlockPassthroughCacheTTL).UnixNano(),
+	})
+	return nil
+}
+
+// cachedThinkingBlockPassthrough 缓存 thinking 块透传开关（进程内缓存，60s TTL）。
+// 该开关在每个 Anthropic 请求的转发热路径上读取，不能每次查库。
+type cachedThinkingBlockPassthrough struct {
+	value     bool
+	expiresAt int64 // unix nano
+}
+
+var thinkingBlockPassthroughCache atomic.Value // *cachedThinkingBlockPassthrough
+var thinkingBlockPassthroughSF singleflight.Group
+
+const thinkingBlockPassthroughCacheTTL = 60 * time.Second
+const thinkingBlockPassthroughErrorTTL = 5 * time.Second
+const thinkingBlockPassthroughDBTimeout = 5 * time.Second
+
+// IsThinkingBlockPassthroughEnabled 判断是否跳过 thinking 块预过滤、原样转发给上游校验。
+// 默认关闭；查询失败时保持预过滤（与历史行为一致）。
+func (s *SettingService) IsThinkingBlockPassthroughEnabled(ctx context.Context) bool {
+	if cached, ok := thinkingBlockPassthroughCache.Load().(*cachedThinkingBlockPassthrough); ok && cached != nil {
+		if time.Now().UnixNano() < cached.expiresAt {
+			return cached.value
+		}
+	}
+	result, _, _ := thinkingBlockPassthroughSF.Do("thinking_block_passthrough", func() (any, error) {
+		if cached, ok := thinkingBlockPassthroughCache.Load().(*cachedThinkingBlockPassthrough); ok && cached != nil {
+			if time.Now().UnixNano() < cached.expiresAt {
+				return cached.value, nil
+			}
+		}
+		dbCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), thinkingBlockPassthroughDBTimeout)
+		defer cancel()
+		settings, err := s.GetRectifierSettings(dbCtx)
+		if err != nil {
+			slog.Warn("failed to get rectifier settings for thinking block passthrough", "error", err)
+			thinkingBlockPassthroughCache.Store(&cachedThinkingBlockPassthrough{
+				value:     false,
+				expiresAt: time.Now().Add(thinkingBlockPassthroughErrorTTL).UnixNano(),
+			})
+			return false, nil
+		}
+		thinkingBlockPassthroughCache.Store(&cachedThinkingBlockPassthrough{
+			value:     settings.ThinkingBlockPassthrough,
+			expiresAt: time.Now().Add(thinkingBlockPassthroughCacheTTL).UnixNano(),
+		})
+		return settings.ThinkingBlockPassthrough, nil
+	})
+	enabled, _ := result.(bool)
+	return enabled
 }
 
 // IsSignatureRectifierEnabled 判断签名整流是否启用（总开关 && 签名子开关）

@@ -535,3 +535,31 @@ func TestRewriteSystemForNonClaudeCodeWithPromptBlocks_UsesConfiguredBlocks(t *t
 	require.Equal(t, "tail", arr[2].Get("text").String())
 	require.Equal(t, "1h", arr[2].Get("cache_control.ttl").String())
 }
+
+func TestClaudeOAuthSystemPromptBlocksForAccount_DropsExpansionWhenDisabled(t *testing.T) {
+	disabled := &Account{
+		Platform: PlatformAnthropic,
+		Type:     AccountTypeOAuth,
+		Extra:    map[string]any{"claude_oauth_expansion_prompt_disabled": true},
+	}
+	enabled := &Account{Platform: PlatformAnthropic, Type: AccountTypeSetupToken}
+	apiKey := &Account{
+		Platform: PlatformAnthropic,
+		Type:     AccountTypeAPIKey,
+		Extra:    map[string]any{"claude_oauth_expansion_prompt_disabled": true},
+	}
+
+	require.Equal(t, claudeFableOAuthSystemPromptBlocks, claudeOAuthSystemPromptBlocksForAccount(disabled, "configured"))
+	require.Equal(t, "configured", claudeOAuthSystemPromptBlocksForAccount(enabled, "configured"))
+	require.Equal(t, "configured", claudeOAuthSystemPromptBlocksForAccount(apiKey, "configured"))
+	require.Equal(t, "configured", claudeOAuthSystemPromptBlocksForAccount(nil, "configured"))
+
+	body := []byte(`{"model":"claude-sonnet-4-5","messages":[{"role":"user","content":"hello"}]}`)
+	result := rewriteSystemForNonClaudeCodeWithPromptBlocks(body, "Project instructions", "", claudeOAuthSystemPromptBlocksForAccount(disabled, ""))
+
+	arr := gjson.GetBytes(result, "system").Array()
+	require.Len(t, arr, 2)
+	require.True(t, strings.HasPrefix(arr[0].Get("text").String(), "x-anthropic-billing-header:"))
+	require.Equal(t, claudeCodeSystemPrompt, arr[1].Get("text").String())
+	require.NotContains(t, string(result), claudeCodeSystemPromptExpansion)
+}

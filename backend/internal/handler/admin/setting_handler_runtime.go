@@ -13,6 +13,9 @@ import (
 // GetAdminAPIKey 获取管理员 API Key 状态
 // GET /api/v1/admin/settings/admin-api-key
 func (h *SettingHandler) GetAdminAPIKey(c *gin.Context) {
+	if !requireAdminKeyJWT(c) {
+		return
+	}
 	maskedKey, exists, err := h.settingService.GetAdminAPIKeyStatus(c.Request.Context())
 	if err != nil {
 		response.ErrorFrom(c, err)
@@ -25,9 +28,21 @@ func (h *SettingHandler) GetAdminAPIKey(c *gin.Context) {
 	})
 }
 
-// RegenerateAdminAPIKey 生成/重新生成管理员 API Key
+// RegenerateAdminAPIKey 轮换已存在的旧版管理员 API Key
 // POST /api/v1/admin/settings/admin-api-key/regenerate
 func (h *SettingHandler) RegenerateAdminAPIKey(c *gin.Context) {
+	if !requireAdminKeyJWT(c) {
+		return
+	}
+	_, exists, err := h.settingService.GetAdminAPIKeyStatus(c.Request.Context())
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	if !exists {
+		response.Error(c, 403, "旧版密钥已停止新建，请创建权限管理密钥")
+		return
+	}
 	key, err := h.settingService.GenerateAdminAPIKey(c.Request.Context())
 	if err != nil {
 		response.ErrorFrom(c, err)
@@ -42,6 +57,9 @@ func (h *SettingHandler) RegenerateAdminAPIKey(c *gin.Context) {
 // DeleteAdminAPIKey 删除管理员 API Key
 // DELETE /api/v1/admin/settings/admin-api-key
 func (h *SettingHandler) DeleteAdminAPIKey(c *gin.Context) {
+	if !requireAdminKeyJWT(c) {
+		return
+	}
 	if err := h.settingService.DeleteAdminAPIKey(c.Request.Context()); err != nil {
 		response.ErrorFrom(c, err)
 		return
@@ -282,6 +300,7 @@ func (h *SettingHandler) GetRectifierSettings(c *gin.Context) {
 		ThinkingBudgetEnabled:    settings.ThinkingBudgetEnabled,
 		APIKeySignatureEnabled:   settings.APIKeySignatureEnabled,
 		APIKeySignaturePatterns:  patterns,
+		ThinkingBlockPassthrough: settings.ThinkingBlockPassthrough,
 	})
 }
 
@@ -292,6 +311,7 @@ type UpdateRectifierSettingsRequest struct {
 	ThinkingBudgetEnabled    bool     `json:"thinking_budget_enabled"`
 	APIKeySignatureEnabled   bool     `json:"apikey_signature_enabled"`
 	APIKeySignaturePatterns  []string `json:"apikey_signature_patterns"`
+	ThinkingBlockPassthrough bool     `json:"thinking_block_passthrough"`
 }
 
 // UpdateRectifierSettings 更新请求整流器配置
@@ -329,6 +349,7 @@ func (h *SettingHandler) UpdateRectifierSettings(c *gin.Context) {
 		ThinkingBudgetEnabled:    req.ThinkingBudgetEnabled,
 		APIKeySignatureEnabled:   req.APIKeySignatureEnabled,
 		APIKeySignaturePatterns:  cleanedPatterns,
+		ThinkingBlockPassthrough: req.ThinkingBlockPassthrough,
 	}
 
 	if err := h.settingService.SetRectifierSettings(c.Request.Context(), settings); err != nil {
@@ -353,6 +374,7 @@ func (h *SettingHandler) UpdateRectifierSettings(c *gin.Context) {
 		ThinkingBudgetEnabled:    updatedSettings.ThinkingBudgetEnabled,
 		APIKeySignatureEnabled:   updatedSettings.APIKeySignatureEnabled,
 		APIKeySignaturePatterns:  updatedPatterns,
+		ThinkingBlockPassthrough: updatedSettings.ThinkingBlockPassthrough,
 	})
 }
 

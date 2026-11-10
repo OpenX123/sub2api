@@ -394,6 +394,7 @@ func (s *GatewayService) applyClaudeCodeOAuthMimicryToBody(
 	systemPromptInjectionEnabled, systemPrompt, systemPromptBlocks := s.claudeOAuthSystemPromptInjectionSettings(ctx)
 	if systemPromptInjectionEnabled {
 		systemPromptBlocks = claudeOAuthSystemPromptBlocksForModel(model, systemPromptBlocks)
+		systemPromptBlocks = claudeOAuthSystemPromptBlocksForAccount(account, systemPromptBlocks)
 		body = rewriteSystemForNonClaudeCodeWithPromptBlocks(body, normalizeSystemParam(systemRaw), systemPrompt, systemPromptBlocks)
 	}
 
@@ -713,6 +714,15 @@ const claudeFableOAuthSystemPromptBlocks = `[
 
 func claudeOAuthSystemPromptBlocksForModel(model, configured string) string {
 	if isAnthropicFableModel(model) {
+		return claudeFableOAuthSystemPromptBlocks
+	}
+	return configured
+}
+
+// claudeOAuthSystemPromptBlocksForAccount 在账号关闭扩展提示词注入时，
+// 改用 billing + 身份前缀的两块形态（与 Fable 相同），否则沿用全局配置。
+func claudeOAuthSystemPromptBlocksForAccount(account *Account, configured string) string {
+	if account != nil && account.IsClaudeOAuthExpansionPromptDisabled() {
 		return claudeFableOAuthSystemPromptBlocks
 	}
 	return configured
