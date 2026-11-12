@@ -48,14 +48,15 @@ func TestThinkingBlocksNeedFilteringMatchesDecodingPath(t *testing.T) {
 		`{"thinking":{"type":"enabled"}} {}`,
 	}
 	for _, body := range bodies {
-		for _, alwaysThinking := range []bool{false, true} {
-			decoded := filterThinkingBlocksDecoded([]byte(body), alwaysThinking)
+		// dropChainOnInvalid 只对 5.5 模型开启，而 5.5 模型必然 thinkingOnByDefault
+		for _, mode := range []struct{ onByDefault, dropChain bool }{{false, false}, {true, false}, {true, true}} {
+			decoded := filterThinkingBlocksDecoded([]byte(body), mode.onByDefault, mode.dropChain)
 			changed := !bytes.Equal(decoded, []byte(body))
-			needs, decided := thinkingBlocksNeedFiltering([]byte(body), alwaysThinking)
+			needs, decided := thinkingBlocksNeedFiltering([]byte(body), mode.onByDefault)
 			if decided && json.Valid([]byte(body)) {
-				require.Equal(t, changed, needs, "alwaysThinking=%v body=%s", alwaysThinking, body)
+				require.Equal(t, changed, needs, "mode=%+v body=%s", mode, body)
 			}
-			require.Equal(t, string(decoded), string(filterThinkingBlocksInternal([]byte(body), alwaysThinking)), "alwaysThinking=%v body=%s", alwaysThinking, body)
+			require.Equal(t, string(decoded), string(filterThinkingBlocksInternal([]byte(body), mode.onByDefault, mode.dropChain)), "mode=%+v body=%s", mode, body)
 		}
 	}
 }
@@ -77,7 +78,7 @@ func signedThinkingHistoryBody() []byte {
 func TestFilterThinkingBlocksSignedHistorySkipsDecode(t *testing.T) {
 	body := signedThinkingHistoryBody()
 	allocs := testing.AllocsPerRun(5, func() {
-		got := filterThinkingBlocksInternal(body, false)
+		got := filterThinkingBlocksInternal(body, false, false)
 		if &got[0] != &body[0] {
 			t.Fatal("valid signed history must be returned unchanged")
 		}
@@ -89,11 +90,12 @@ func FuzzThinkingBlocksNeedFiltering(f *testing.F) {
 	f.Add([]byte(`{"thinking":{"type":"enabled"},"messages":[{"role":"assistant","content":[{"type":"thinking","thinking":"t","signature":"sig"}]}]}`), false)
 	f.Add([]byte(`{"thinking":{"type":"adaptive"},"messages":[{"role":"assistant","content":[{"type":"redacted_thinking","data":"d"},{"thinking":1}]}]}`), true)
 	f.Add([]byte(`{"messages":[{"role":"user","role":"assistant","content":[{"type":"thinking","signature":"","signature":"s"}]}]}`), true)
-	f.Fuzz(func(t *testing.T, body []byte, alwaysThinking bool) {
+	f.Fuzz(func(t *testing.T, body []byte, onByDefault bool) {
+		dropChain := onByDefault
 		original := append([]byte(nil), body...)
-		decoded := filterThinkingBlocksDecoded(original, alwaysThinking)
-		needs, decided := thinkingBlocksNeedFiltering(body, alwaysThinking)
-		if !bytes.Equal(filterThinkingBlocksInternal(body, alwaysThinking), decoded) {
+		decoded := filterThinkingBlocksDecoded(original, onByDefault, dropChain)
+		needs, decided := thinkingBlocksNeedFiltering(body, onByDefault)
+		if !bytes.Equal(filterThinkingBlocksInternal(body, onByDefault, dropChain), decoded) {
 			t.Fatalf("filter output differs from decoding path for %q", body)
 		}
 		if decided && json.Valid(original) && needs == bytes.Equal(decoded, original) {
@@ -110,14 +112,14 @@ func BenchmarkFilterThinkingBlocksSignedHistory(b *testing.B) {
 		b.ReportAllocs()
 		b.SetBytes(int64(len(body)))
 		for i := 0; i < b.N; i++ {
-			_ = filterThinkingBlocksDecoded(body, false)
+			_ = filterThinkingBlocksDecoded(body, false, false)
 		}
 	})
 	b.Run("Precheck", func(b *testing.B) {
 		b.ReportAllocs()
 		b.SetBytes(int64(len(body)))
 		for i := 0; i < b.N; i++ {
-			_ = filterThinkingBlocksInternal(body, false)
+			_ = filterThinkingBlocksInternal(body, false, false)
 		}
 	})
 }

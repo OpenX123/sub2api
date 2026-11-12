@@ -1529,10 +1529,10 @@ func filterThinkingBlocksInternal(body []byte, thinkingOnByDefault, dropChainOnI
 	}
 	// Signed thinking history and top-level thinking config defeat the substring
 	// check on most requests; decide without decoding when nothing is dropped.
-	if needs, decided := thinkingBlocksNeedFiltering(body, alwaysThinking); decided && !needs {
+	if needs, decided := thinkingBlocksNeedFiltering(body, thinkingOnByDefault); decided && !needs {
 		return body
 	}
-	return filterThinkingBlocksDecoded(body, alwaysThinking)
+	return filterThinkingBlocksDecoded(body, thinkingOnByDefault, dropChainOnInvalid)
 }
 
 // thinkingBlocksNeedFiltering reports whether filterThinkingBlocksDecoded would
@@ -1541,7 +1541,7 @@ func filterThinkingBlocksInternal(body []byte, thinkingOnByDefault, dropChainOnI
 // during this call. A non-object root is left to the decoding path
 // (decided=false). Invalid JSON needs no separate scan: the decoding path
 // returns it unchanged, so either answer yields the same body.
-func thinkingBlocksNeedFiltering(body []byte, alwaysThinking bool) (needs, decided bool) {
+func thinkingBlocksNeedFiltering(body []byte, thinkingOnByDefault bool) (needs, decided bool) {
 	view := openAIWSPayloadStringView(body)
 	root := gjson.Parse(view)
 	if !root.IsObject() {
@@ -1558,7 +1558,7 @@ func thinkingBlocksNeedFiltering(body []byte, alwaysThinking bool) (needs, decid
 		return true
 	})
 
-	thinkingEnabled := alwaysThinking
+	thinkingEnabled := thinkingOnByDefault
 	if thinking.IsObject() {
 		var thinkType gjson.Result
 		thinking.ForEach(func(key, value gjson.Result) bool {
@@ -1619,10 +1619,12 @@ func thinkingBlocksNeedFiltering(body []byte, alwaysThinking bool) (needs, decid
 			switch {
 			case typ == "thinking" || typ == "redacted_thinking":
 				if thinkingEnabled && isAssistant {
-					if alwaysThinking && typ == "redacted_thinking" && data.Type == gjson.String && data.Str != "" {
-						return true
-					}
-					if signature.Type == gjson.String && signature.Str != "" && signature.Str != antigravity.DummyThoughtSignature {
+					// 与 filterThinkingBlocksDecoded 一致：redacted_thinking 只按 data 判断，thinking 按 signature 判断
+					if typ == "redacted_thinking" {
+						if data.Type == gjson.String && data.Str != "" {
+							return true
+						}
+					} else if signature.Type == gjson.String && signature.Str != "" && signature.Str != antigravity.DummyThoughtSignature {
 						return true
 					}
 				}
@@ -1637,7 +1639,7 @@ func thinkingBlocksNeedFiltering(body []byte, alwaysThinking bool) (needs, decid
 	return needs, true
 }
 
-func filterThinkingBlocksDecoded(body []byte, alwaysThinking bool) []byte {
+func filterThinkingBlocksDecoded(body []byte, thinkingOnByDefault, dropChainOnInvalid bool) []byte {
 	var req map[string]any
 	if err := json.Unmarshal(body, &req); err != nil {
 		return body
