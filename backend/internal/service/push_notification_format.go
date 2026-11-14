@@ -75,6 +75,22 @@ func formatModerationHit(ev ModerationHitEvent, link string) pushMessage {
 	return pushMessage{category: PushCategoryHit, title: title, desp: b.String()}
 }
 
+func formatOpsAlert(rule *OpsAlertRule, event *OpsAlertEvent) pushMessage {
+	var b strings.Builder
+	fmt.Fprintf(&b, "- 规则：%s（%s）\n", rule.Name, rule.MetricType)
+	if event.Description != "" {
+		fmt.Fprintf(&b, "- 描述：%s\n", event.Description)
+	}
+	if event.MetricValue != nil {
+		fmt.Fprintf(&b, "- 当前值：%.4g\n", *event.MetricValue)
+	}
+	if event.ThresholdValue != nil {
+		fmt.Fprintf(&b, "- 阈值：%.4g\n", *event.ThresholdValue)
+	}
+	fmt.Fprintf(&b, "- 触发时间：%s\n", event.FiredAt.In(ContentModerationReportLocation()).Format("2006-01-02 15:04:05"))
+	return pushMessage{category: PushCategoryOps, title: "【P0】" + event.Title, desp: b.String()}
+}
+
 func formatHitSummary(sum moderationHitSummary) pushMessage {
 	start := sum.WindowStart.In(ContentModerationReportLocation()).Format("15:04")
 	note := ""

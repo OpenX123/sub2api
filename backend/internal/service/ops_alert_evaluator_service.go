@@ -55,6 +55,23 @@ type OpsAlertEvaluatorService struct {
 	skipLogAt time.Time
 
 	warnNoRedisOnce sync.Once
+
+	criticalNotifier OpsCriticalAlertNotifier
+}
+
+// OpsCriticalAlertNotifier receives newly created P0 alert events (e.g. WeChat push).
+type OpsCriticalAlertNotifier interface {
+	NotifyOpsAlert(ctx context.Context, rule *OpsAlertRule, event *OpsAlertEvent)
+}
+
+func (s *OpsAlertEvaluatorService) SetCriticalAlertNotifier(n OpsCriticalAlertNotifier) {
+	if s != nil {
+		s.criticalNotifier = n
+	}
+}
+
+func isOpsCriticalSeverity(severity string) bool {
+	return strings.EqualFold(strings.TrimSpace(severity), "P0")
 }
 
 type opsAlertRuleState struct {
@@ -294,6 +311,9 @@ func (s *OpsAlertEvaluatorService) evaluateOnce(interval time.Duration) {
 			if created != nil && created.ID > 0 {
 				if s.maybeSendAlertEmail(ctx, runtimeCfg, rule, created) {
 					emailsSent++
+				}
+				if s.criticalNotifier != nil && isOpsCriticalSeverity(rule.Severity) {
+					s.criticalNotifier.NotifyOpsAlert(ctx, rule, created)
 				}
 			}
 			continue

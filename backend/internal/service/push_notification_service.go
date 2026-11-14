@@ -196,3 +196,14 @@ func (s *PushNotificationService) adminLogLink(ctx context.Context, requestID st
 	}
 	return strings.TrimRight(strings.TrimSpace(base), "/") + "/admin/risk-control?search=" + url.QueryEscape(requestID)
 }
+
+// NotifyOpsAlert forwards a P0 ops alert when the ops push switch is on.
+func (s *PushNotificationService) NotifyOpsAlert(ctx context.Context, rule *OpsAlertRule, event *OpsAlertEvent) {
+	if s == nil || rule == nil || event == nil {
+		return
+	}
+	if !s.loadConfig(ctx).OpsCriticalEnabled {
+		return
+	}
+	s.enqueue(formatOpsAlert(rule, event))
+}

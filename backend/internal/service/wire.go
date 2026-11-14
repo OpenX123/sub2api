@@ -589,8 +589,12 @@ func ProvideOpsAlertEvaluatorService(
 	redisClient *redis.Client,
 	cfg *config.Config,
 	proxyRepo ProxyRepository,
+	push *PushNotificationService,
 ) *OpsAlertEvaluatorService {
 	svc := NewOpsAlertEvaluatorService(opsService, opsRepo, emailService, redisClient, cfg, proxyRepo)
+	if push != nil {
+		svc.SetCriticalAlertNotifier(push)
+	}
 	svc.Start()
 	return svc
 }
