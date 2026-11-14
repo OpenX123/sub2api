@@ -155,6 +155,7 @@ type ContentModerationConfig struct {
 	SampleRate           int                          `json:"sample_rate"`
 	AllGroups            bool                         `json:"all_groups"`
 	GroupIDs             []int64                      `json:"group_ids"`
+	ObserveUserIDs       []int64                      `json:"observe_user_ids"` // audited and notified, never blocked
 	RecordNonHits        bool                         `json:"record_non_hits"`
 	Thresholds           map[string]float64           `json:"thresholds"`
 	WorkerCount          int                          `json:"worker_count"`
@@ -195,6 +196,7 @@ type ContentModerationConfigView struct {
 	SampleRate                     int                                     `json:"sample_rate"`
 	AllGroups                      bool                                    `json:"all_groups"`
 	GroupIDs                       []int64                                 `json:"group_ids"`
+	ObserveUserIDs                 []int64                                 `json:"observe_user_ids"`
 	RecordNonHits                  bool                                    `json:"record_non_hits"`
 	Thresholds                     map[string]float64                      `json:"thresholds"`
 	WorkerCount                    int                                     `json:"worker_count"`
@@ -292,6 +294,7 @@ type UpdateContentModerationConfigInput struct {
 	SampleRate                     *int                          `json:"sample_rate"`
 	AllGroups                      *bool                         `json:"all_groups"`
 	GroupIDs                       *[]int64                      `json:"group_ids"`
+	ObserveUserIDs                 *[]int64                      `json:"observe_user_ids"`
 	RecordNonHits                  *bool                         `json:"record_non_hits"`
 	Thresholds                     *map[string]float64           `json:"thresholds"`
 	WorkerCount                    *int                          `json:"worker_count"`
@@ -551,7 +554,7 @@ type ContentModerationService struct {
 }
 
 type contentModerationRuntimeSnapshot struct {
-	allowlistedUsers   map[int64]struct{}
+	observeUsers       map[int64]struct{}
 	riskControlEnabled bool
 	config             *ContentModerationConfig
 	keywordMatcher     *contentModerationKeywordMatcher
@@ -696,6 +699,9 @@ func (s *ContentModerationService) UpdateConfig(ctx context.Context, input Updat
 	}
 	if input.GroupIDs != nil {
 		cfg.GroupIDs = normalizeInt64IDs(*input.GroupIDs)
+	}
+	if input.ObserveUserIDs != nil {
+		cfg.ObserveUserIDs = normalizeInt64IDs(*input.ObserveUserIDs)
 	}
 	if input.RecordNonHits != nil {
 		cfg.RecordNonHits = *input.RecordNonHits
@@ -856,7 +862,7 @@ func (s *ContentModerationService) Check(ctx context.Context, input ContentModer
 			"protocol", input.Protocol)
 		return allow, nil
 	}
-	_, input.riskControlLogOnly = runtimeSnapshot.allowlistedUsers[input.UserID]
+	_, input.riskControlLogOnly = runtimeSnapshot.observeUsers[input.UserID]
 	// Keep audit evidence while ensuring all local rejection paths allow trusted users.
 	defer func() {
 		if input.riskControlLogOnly && decision != nil {
@@ -1632,20 +1638,15 @@ func (s *ContentModerationService) refreshRuntimeSnapshot(ctx context.Context) (
 	values, err := s.settingRepo.GetMultiple(ctx, []string{
 		SettingKeyRiskControlEnabled,
 		SettingKeyContentModerationConfig,
-		SettingKeyCyberPolicyUserAllowlist,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("get content moderation runtime settings: %w", err)
-	}
-	allowlistedUsers, err := ParseCyberPolicyUserAllowlist(values[SettingKeyCyberPolicyUserAllowlist])
-	if err != nil {
-		return nil, err
 	}
 	rawConfig := values[SettingKeyContentModerationConfig]
 	configDigest := sha256.Sum256([]byte(rawConfig))
 	if current := s.runtimeSnapshot.Load(); current != nil && current.configDigest == configDigest {
 		snapshot := &contentModerationRuntimeSnapshot{
-			allowlistedUsers:   allowlistedUsers,
+			observeUsers:       current.observeUsers,
 			riskControlEnabled: values[SettingKeyRiskControlEnabled] == "true",
 			config:             current.config,
 			keywordMatcher:     current.keywordMatcher,
@@ -1662,7 +1663,7 @@ func (s *ContentModerationService) refreshRuntimeSnapshot(ctx context.Context) (
 	}
 	cfg = cfg.effectiveEngine(cfg.Engine)
 	snapshot := &contentModerationRuntimeSnapshot{
-		allowlistedUsers:   allowlistedUsers,
+		observeUsers:       contentModerationObserveSet(cfg),
 		riskControlEnabled: values[SettingKeyRiskControlEnabled] == "true",
 		config:             cfg,
 		keywordMatcher:     newContentModerationKeywordMatcher(cfg.BlockedKeywords),
@@ -1695,13 +1696,21 @@ func (s *ContentModerationService) replaceRuntimeConfig(cfg *ContentModerationCo
 		return
 	}
 	s.runtimeSnapshot.Store(&contentModerationRuntimeSnapshot{
-		allowlistedUsers:   current.allowlistedUsers,
+		observeUsers:       contentModerationObserveSet(config),
 		riskControlEnabled: current.riskControlEnabled,
 		config:             config,
 		keywordMatcher:     keywordMatcher,
 		configDigest:       configDigest,
 		loadedAt:           time.Now(),
 	})
+}
+
+func contentModerationObserveSet(cfg *ContentModerationConfig) map[int64]struct{} {
+	set := make(map[int64]struct{}, len(cfg.ObserveUserIDs))
+	for _, id := range cfg.ObserveUserIDs {
+		set[id] = struct{}{}
+	}
+	return set
 }
 
 func (s *contentModerationRuntimeSnapshot) matchBlockedKeyword(text string) (string, bool) {
@@ -2201,6 +2210,7 @@ func defaultContentModerationConfig() *ContentModerationConfig {
 		SampleRate:           100,
 		AllGroups:            true,
 		GroupIDs:             []int64{},
+		ObserveUserIDs:       []int64{},
 		RecordNonHits:        false,
 		Thresholds:           ContentModerationDefaultThresholds(),
 		WorkerCount:          defaultContentModerationWorkerCount,
@@ -2236,6 +2246,7 @@ func cloneContentModerationConfig(cfg *ContentModerationConfig) *ContentModerati
 	clone.ProxyID = cloneInt64Ptr(cfg.ProxyID)
 	clone.APIKeys = append([]string(nil), cfg.APIKeys...)
 	clone.GroupIDs = append([]int64(nil), cfg.GroupIDs...)
+	clone.ObserveUserIDs = append([]int64(nil), cfg.ObserveUserIDs...)
 	clone.BlockedKeywords = append([]string(nil), cfg.BlockedKeywords...)
 	clone.Thresholds = cloneFloatMap(cfg.Thresholds)
 	clone.ModelFilter = ContentModerationModelFilter{
@@ -2323,6 +2334,7 @@ func (cfg *ContentModerationConfig) normalize() {
 		cfg.NonHitRetentionDays = maxContentModerationNonHitRetentionDays
 	}
 	cfg.GroupIDs = normalizeInt64IDs(cfg.GroupIDs)
+	cfg.ObserveUserIDs = normalizeInt64IDs(cfg.ObserveUserIDs)
 	cfg.Thresholds = mergeContentModerationThresholds(ContentModerationDefaultThresholds(), cfg.Thresholds)
 	cfg.BlockedKeywords = normalizeBlockedKeywords(cfg.BlockedKeywords)
 	cfg.KeywordBlockingMode = normalizeKeywordBlockingMode(cfg.KeywordBlockingMode)
@@ -2557,6 +2569,7 @@ func (s *ContentModerationService) configView(cfg *ContentModerationConfig) *Con
 		SampleRate:                     cfg.SampleRate,
 		AllGroups:                      cfg.AllGroups,
 		GroupIDs:                       append([]int64(nil), cfg.GroupIDs...),
+		ObserveUserIDs:                 append([]int64(nil), cfg.ObserveUserIDs...),
 		RecordNonHits:                  cfg.RecordNonHits,
 		Thresholds:                     cloneFloatMap(cfg.Thresholds),
 		WorkerCount:                    cfg.WorkerCount,

@@ -52,7 +52,7 @@ func TestRiskControlAllowlistRetainsLastGoodValueAndRetries(t *testing.T) {
 	}
 }
 
-func TestRiskControlAllowlistAuditsWithoutLocalPenalties(t *testing.T) {
+func TestContentModerationObserveUsersAuditWithoutLocalPenalties(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_ = json.NewEncoder(w).Encode(moderationAPIResponse{Results: []moderationAPIResult{{CategoryScores: map[string]float64{"sexual": 0.99}}}})
 	}))
@@ -63,6 +63,7 @@ func TestRiskControlAllowlistAuditsWithoutLocalPenalties(t *testing.T) {
 			cfg.Enabled, cfg.AutoBanEnabled, cfg.EmailOnHit = true, true, true
 			cfg.BanThreshold = 1
 			cfg.Mode = ContentModerationModePreBlock
+			cfg.ObserveUserIDs = []int64{12}
 			cfg.BaseURL, cfg.APIKeys = server.URL, []string{"sk-test"}
 			if path == "observe" {
 				cfg.Mode = ContentModerationModeObserve
@@ -80,7 +81,7 @@ func TestRiskControlAllowlistAuditsWithoutLocalPenalties(t *testing.T) {
 			repo := &banCountArgsTestRepo{}
 			svc := &ContentModerationService{
 				settingRepo: &contentModerationTestSettingRepo{values: map[string]string{
-					SettingKeyRiskControlEnabled: "true", SettingKeyContentModerationConfig: string(raw), SettingKeyCyberPolicyUserAllowlist: "12",
+					SettingKeyRiskControlEnabled: "true", SettingKeyContentModerationConfig: string(raw),
 				}},
 				repo: repo, hashCache: hashes, emailService: &EmailService{},
 				httpClient: server.Client(), asyncQueue: make(chan contentModerationTask, 4), keyHealth: make(map[string]*contentModerationKeyHealth),
@@ -118,36 +119,4 @@ func TestRiskControlAllowlistAuditsWithoutLocalPenalties(t *testing.T) {
 			}
 		})
 	}
-}
-
-type failingModerationAllowlistRepo struct {
-	contentModerationTestSettingRepo
-	fail bool
-}
-
-func (r *failingModerationAllowlistRepo) GetMultiple(ctx context.Context, keys []string) (map[string]string, error) {
-	if r.fail {
-		return nil, errors.New("database unavailable")
-	}
-	return r.contentModerationTestSettingRepo.GetMultiple(ctx, keys)
-}
-
-func TestRiskControlAllowlistSnapshotRetainsMembershipOnFailure(t *testing.T) {
-	repo := &failingModerationAllowlistRepo{contentModerationTestSettingRepo: contentModerationTestSettingRepo{values: map[string]string{
-		SettingKeyRiskControlEnabled: "true", SettingKeyCyberPolicyUserAllowlist: "12",
-	}}}
-	svc := &ContentModerationService{settingRepo: repo}
-	ctx := context.Background()
-	_, err := svc.refreshRuntimeSnapshot(ctx)
-	require.NoError(t, err)
-	repo.fail = true
-	_, err = svc.refreshRuntimeSnapshot(ctx)
-	require.Error(t, err)
-	require.Contains(t, svc.runtimeSnapshot.Load().allowlistedUsers, int64(12))
-	repo.fail = false
-	repo.values[SettingKeyCyberPolicyUserAllowlist] = "34"
-	_, err = svc.refreshRuntimeSnapshot(ctx)
-	require.NoError(t, err)
-	require.NotContains(t, svc.runtimeSnapshot.Load().allowlistedUsers, int64(12))
-	require.Contains(t, svc.runtimeSnapshot.Load().allowlistedUsers, int64(34))
 }
