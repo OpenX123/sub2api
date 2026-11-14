@@ -546,6 +546,8 @@ type ContentModerationService struct {
 	keyHealthMu              sync.Mutex
 	keyHealth                map[string]*contentModerationKeyHealth
 	statsStore               ContentModerationStatsStore
+	notifier                 ContentModerationNotifier
+	health                   contentModerationHealth
 }
 
 type contentModerationRuntimeSnapshot struct {
@@ -1773,6 +1775,7 @@ func (s *ContentModerationService) callModeration(ctx context.Context, cfg *Cont
 			if lastErr == nil {
 				lastErr = s.noUsableAPIKeyError(cfg)
 			}
+			s.reportAttempt(moderationAttemptOutcome{NoKeyAvailable: true, Err: lastErr.Error()})
 			break
 		}
 		if trackLoad {
@@ -1782,6 +1785,11 @@ func (s *ContentModerationService) callModeration(ctx context.Context, cfg *Cont
 		httpStatus := 0
 		result, err := s.callModerationOnceWithInput(ctx, cfg, key, input, &httpStatus)
 		latency := int(time.Since(start).Milliseconds())
+		outcome := moderationAttemptOutcome{Success: err == nil, HTTPStatus: httpStatus}
+		if err != nil {
+			outcome.Err = err.Error()
+		}
+		s.reportAttempt(outcome)
 		if err == nil {
 			if trackLoad {
 				s.finishModerationAPIKeyCall(key, latency, true, cfg.Engine)
