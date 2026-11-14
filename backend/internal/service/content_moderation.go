@@ -82,6 +82,7 @@ const (
 	contentModerationKeyRateLimitFreezeDuration  = time.Minute
 	contentModerationKeyAuthFreezeDuration       = 10 * time.Minute
 	contentModerationKeyHTTPErrorFreezeDuration  = 10 * time.Second
+	contentModerationKeyBalanceFreezeDuration    = 10 * time.Minute
 	maxContentModerationInputImages              = 1
 	maxContentModerationTestImages               = maxContentModerationInputImages
 	maxContentModerationTestImageBytes           = 8 * 1024 * 1024
@@ -1769,7 +1770,9 @@ func (s *ContentModerationService) callModeration(ctx context.Context, cfg *Cont
 	for attempt := 0; attempt < attempts; attempt++ {
 		key, ok := s.nextUsableAPIKey(cfg)
 		if !ok {
-			lastErr = errors.New("no moderation api key available")
+			if lastErr == nil {
+				lastErr = s.noUsableAPIKeyError(cfg)
+			}
 			break
 		}
 		if trackLoad {
@@ -2374,6 +2377,20 @@ func (s *ContentModerationService) nextUsableAPIKey(cfg *ContentModerationConfig
 	return "", false
 }
 
+// noUsableAPIKeyError surfaces the frozen key's last real error (e.g. a 402) instead of a generic message.
+func (s *ContentModerationService) noUsableAPIKeyError(cfg *ContentModerationConfig) error {
+	if s != nil {
+		s.keyHealthMu.Lock()
+		defer s.keyHealthMu.Unlock()
+		for _, key := range cfg.apiKeys() {
+			if state := s.keyHealth[scopedModerationKeyHash(key, cfg.Engine)]; state != nil && state.LastError != "" {
+				return fmt.Errorf("no moderation api key available: %s", state.LastError)
+			}
+		}
+	}
+	return errors.New("no moderation api key available")
+}
+
 func (s *ContentModerationService) isAPIKeyFrozen(key string, now time.Time, engine ...string) bool {
 	hash := scopedModerationKeyHash(key, engine...)
 	if hash == "" || s == nil {
@@ -2466,6 +2483,8 @@ func contentModerationFreezeDurationForHTTPStatus(httpStatus int) time.Duration 
 		return contentModerationKeyAuthFreezeDuration
 	case http.StatusTooManyRequests, 529:
 		return contentModerationKeyRateLimitFreezeDuration
+	case http.StatusPaymentRequired:
+		return contentModerationKeyBalanceFreezeDuration
 	default:
 		return contentModerationKeyHTTPErrorFreezeDuration
 	}
