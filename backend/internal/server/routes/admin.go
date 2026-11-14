@@ -180,6 +180,9 @@ func registerContentModerationRoutes(admin *gin.RouterGroup, h *handler.Handlers
 		risk.POST("/users/:user_id/unban", h.Admin.ContentModeration.UnbanUser)
 		risk.DELETE("/hashes", h.Admin.ContentModeration.DeleteFlaggedHash)
 		risk.DELETE("/hashes/all", h.Admin.ContentModeration.ClearFlaggedHashes)
+		risk.GET("/push/config", h.Admin.PushNotification.GetConfig)
+		risk.PUT("/push/config", h.Admin.PushNotification.UpdateConfig)
+		risk.POST("/push/test", h.Admin.PushNotification.SendTest)
 	}
 }
 

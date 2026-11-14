@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"database/sql"
+	"net/http"
 	"os"
 	"time"
 
@@ -12,6 +13,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/pkg/antigravity"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/claude"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/serverchan"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/xai"
 	"github.com/google/wire"
 	"github.com/redis/go-redis/v9"
@@ -562,9 +564,20 @@ func ProvideContentModerationService(
 	authCacheInvalidator APIKeyAuthCacheInvalidator,
 	emailService *EmailService,
 	statsStore ContentModerationStatsStore,
+	push *PushNotificationService,
 ) *ContentModerationService {
 	svc := NewContentModerationService(settingRepo, repo, hashCache, groupRepo, userRepo, proxyRepo, authCacheInvalidator, emailService)
 	svc.SetStatsStore(statsStore)
+	if push != nil {
+		svc.SetNotifier(push)
+	}
+	return svc
+}
+
+// ProvidePushNotificationService creates and starts the ServerChan push service.
+func ProvidePushNotificationService(settingRepo SettingRepository, store PushNotificationStore) *PushNotificationService {
+	svc := NewPushNotificationService(settingRepo, store, serverchan.NewClient(&http.Client{Timeout: 10 * time.Second}))
+	svc.Start()
 	return svc
 }
 
@@ -994,6 +1007,7 @@ var ProviderSet = wire.NewSet(
 	NewModelPricingResolver,
 	NewModelPlazaService,
 	ProvideContentModerationService,
+	ProvidePushNotificationService,
 	NewAffiliateService,
 	ProvidePaymentConfigService,
 	ProvidePaymentService,
