@@ -3,6 +3,8 @@ package service
 import (
 	"context"
 	"log/slog"
+	"net/url"
+	"strings"
 	"sync"
 	"time"
 )
@@ -38,6 +40,7 @@ type PushNotificationService struct {
 	startOnce   sync.Once
 	stopOnce    sync.Once
 	wg          sync.WaitGroup
+	hits        moderationHitAggregator
 }
 
 func NewPushNotificationService(settingRepo SettingRepository, store PushNotificationStore, sender PushSender) *PushNotificationService {
@@ -155,7 +158,41 @@ func (s *PushNotificationService) NotifySystemAlert(_ context.Context, alert Mod
 	s.enqueue(formatSystemAlert(alert))
 }
 
-// NotifyModerationHit is completed with per-user merge windows in the hit aggregator.
-func (s *PushNotificationService) NotifyModerationHit(_ context.Context, _ ModerationHitEvent) {}
+// NotifyModerationHit pushes the first hit of a user's merge window immediately and
+// folds later hits into a summary sent when the window closes.
+func (s *PushNotificationService) NotifyModerationHit(ctx context.Context, ev ModerationHitEvent) {
+	if s == nil {
+		return
+	}
+	cfg := s.loadConfig(ctx)
+	if !cfg.Enabled {
+		return
+	}
+	window := time.Duration(cfg.HitWindowMinutes) * time.Minute
+	immediate, expired := s.hits.record(ev, window)
+	if expired != nil {
+		s.enqueue(formatHitSummary(*expired))
+	}
+	if immediate {
+		s.enqueue(formatModerationHit(ev, s.adminLogLink(ctx, ev.RequestID)))
+	}
+}
 
-func (s *PushNotificationService) flushHitWindows(_ context.Context) {}
+func (s *PushNotificationService) flushHitWindows(ctx context.Context) {
+	cfg := s.loadConfig(ctx)
+	window := time.Duration(cfg.HitWindowMinutes) * time.Minute
+	for _, sum := range s.hits.flush(s.now(), window) {
+		s.enqueue(formatHitSummary(sum))
+	}
+}
+
+func (s *PushNotificationService) adminLogLink(ctx context.Context, requestID string) string {
+	if s == nil || s.settingRepo == nil || requestID == "" {
+		return ""
+	}
+	base, err := s.settingRepo.GetValue(ctx, SettingKeyFrontendURL)
+	if err != nil || strings.TrimSpace(base) == "" {
+		return ""
+	}
+	return strings.TrimRight(strings.TrimSpace(base), "/") + "/admin/risk-control?search=" + url.QueryEscape(requestID)
+}

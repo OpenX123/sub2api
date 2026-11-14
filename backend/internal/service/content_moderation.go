@@ -1997,12 +1997,30 @@ func (s *ContentModerationService) persistContentModerationLog(ctx context.Conte
 		autoBanJustApplied = s.applyFlaggedAccountSideEffects(ctx, cfg, log)
 		s.sendFlaggedNotificationSideEffects(ctx, cfg, log, autoBanJustApplied)
 	}
+	s.notifyHit(log, hashText)
 	if s.repo != nil {
 		if err := s.repo.CreateLog(ctx, log); err != nil {
 			slog.Warn("content_moderation.create_log_failed", "user_id", contentModerationEmailUserID(log), "endpoint", log.Endpoint, "action", log.Action, "error", err)
 			return
 		}
 	}
+}
+
+// notifyHit forwards flagged audits to the notifier; it never includes the audited text.
+func (s *ContentModerationService) notifyHit(log *ContentModerationLog, inputHash string) {
+	if s == nil || s.notifier == nil || log == nil || !log.Flagged {
+		return
+	}
+	var userID int64
+	if log.UserID != nil {
+		userID = *log.UserID
+	}
+	s.notifier.NotifyModerationHit(context.Background(), ModerationHitEvent{
+		UserID: userID, UserEmail: log.UserEmail, GroupName: log.GroupName, Model: log.Model,
+		Category: log.HighestCategory, Score: log.HighestScore, Action: log.Action,
+		Observe:   log.Mode == ContentModerationModeRiskControlLogOnly,
+		InputHash: inputHash, RequestID: log.RequestID, At: time.Now(),
+	})
 }
 
 func (s *ContentModerationService) applyFlaggedAccountSideEffects(ctx context.Context, cfg *ContentModerationConfig, log *ContentModerationLog) bool {

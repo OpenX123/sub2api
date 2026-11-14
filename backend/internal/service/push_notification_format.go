@@ -1,6 +1,9 @@
 package service
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 type PushCategory string
 
@@ -40,4 +43,47 @@ func formatSystemAlert(alert ModerationSystemAlert) pushMessage {
 func formatHitCapNotice(limit int) pushMessage {
 	return pushMessage{category: PushCategoryNotice, title: "【提示】今日命中推送已达上限",
 		desp: fmt.Sprintf("今天的命中推送已达到 %d 条上限，之后的命中不再实时推送，请查看后台和明天的日报。", limit)}
+}
+
+func moderationHitLabel(ev ModerationHitEvent) string {
+	switch {
+	case ev.Observe:
+		return "观察"
+	case ev.Action == ContentModerationActionAllow:
+		return "命中"
+	default:
+		return "拦截"
+	}
+}
+
+func formatModerationHit(ev ModerationHitEvent, link string) pushMessage {
+	label := moderationHitLabel(ev)
+	var b strings.Builder
+	b.WriteString("| 项目 | 内容 |\n|---|---|\n")
+	fmt.Fprintf(&b, "| 用户 | %s（ID %d） |\n", ev.UserEmail, ev.UserID)
+	fmt.Fprintf(&b, "| 分组 | %s |\n| 模型 | %s |\n", ev.GroupName, ev.Model)
+	fmt.Fprintf(&b, "| 类别 | %s（%.2f） |\n", ev.Category, ev.Score)
+	handling := label
+	if ev.Observe {
+		handling = "观察名单用户，本次未拦截（若开拦会被拦）"
+	}
+	fmt.Fprintf(&b, "| 处理 | %s |\n| request_id | %s |\n| 内容哈希 | %s |\n", handling, ev.RequestID, ev.InputHash)
+	if link != "" {
+		fmt.Fprintf(&b, "\n[在后台查看](%s)\n", link)
+	}
+	title := fmt.Sprintf("【%s】%s %.2f %s", label, ev.Category, ev.Score, ev.UserEmail)
+	return pushMessage{category: PushCategoryHit, title: title, desp: b.String()}
+}
+
+func formatHitSummary(sum moderationHitSummary) pushMessage {
+	start := sum.WindowStart.In(ContentModerationReportLocation()).Format("15:04")
+	note := ""
+	if sum.Observe {
+		note = "（观察名单用户，未拦截）"
+	}
+	return pushMessage{
+		category: PushCategoryHit,
+		title:    fmt.Sprintf("【合并】%s 又命中%d次", sum.UserEmail, sum.Count),
+		desp:     fmt.Sprintf("用户 %s（ID %d）在 %s 起的 %d 分钟内又命中 %d 次，主要类别 %s%s。", sum.UserEmail, sum.UserID, start, int(sum.Window.Minutes()), sum.Count, sum.TopCategory, note),
+	}
 }
