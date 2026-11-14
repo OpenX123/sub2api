@@ -544,6 +544,7 @@ type ContentModerationService struct {
 	runtimeRefreshRetryAt    atomic.Int64
 	keyHealthMu              sync.Mutex
 	keyHealth                map[string]*contentModerationKeyHealth
+	statsStore               ContentModerationStatsStore
 }
 
 type contentModerationRuntimeSnapshot struct {
@@ -948,6 +949,11 @@ func (s *ContentModerationService) Check(ctx context.Context, input ContentModer
 				scores := map[string]float64{contentModerationKeywordCategory: 1.0}
 				log := s.buildLog(input, cfg, ContentModerationActionKeywordBlock, true, contentModerationKeywordCategory, 1.0, scores, keywordText, nil, nil, "")
 				log.MatchedKeyword = keyword
+				keywordDelta := ContentModerationDailyStats{Audits: 1, KeywordBlocks: 1}
+				if input.riskControlLogOnly {
+					keywordDelta = ContentModerationDailyStats{Audits: 1, ObserveFlagged: 1}
+				}
+				s.recordStats(keywordDelta)
 				s.enqueueRecord(input, cfg, log, (ContentModerationInput{Text: keywordText}).Hash(), false, true)
 				return &ContentModerationDecision{
 					Allowed:         false,
@@ -1020,6 +1026,11 @@ func (s *ContentModerationService) Check(ctx context.Context, input ContentModer
 			}
 			scores := map[string]float64{"hash": 1.0}
 			log := s.buildLog(input, cfg, ContentModerationActionHashBlock, true, "hash", 1.0, scores, content.ExcerptText(), nil, nil, "")
+			hashDelta := ContentModerationDailyStats{Audits: 1, HashBlocks: 1}
+			if input.riskControlLogOnly {
+				hashDelta = ContentModerationDailyStats{Audits: 1, ObserveFlagged: 1}
+			}
+			s.recordStats(hashDelta)
 			s.enqueueRecord(input, cfg, log, hashText, false, false)
 			return &ContentModerationDecision{
 				Allowed:    false,
@@ -1083,6 +1094,7 @@ func (s *ContentModerationService) checkSync(ctx context.Context, input ContentM
 	result, err := s.callModeration(ctx, cfg, content.ModerationInput(), trackPreBlock)
 	latency := int(time.Since(start).Milliseconds())
 	if err != nil {
+		s.recordStats(ContentModerationDailyStats{Audits: 1, UpstreamCalls: 1, Errors: 1})
 		if trackPreBlock {
 			s.recordPreBlockSyncMetric(latency, ContentModerationActionError)
 		}
@@ -1116,6 +1128,20 @@ func (s *ContentModerationService) checkSync(ctx context.Context, input ContentM
 		action = ContentModerationActionBlock
 		blocked = true
 	}
+	delta := ContentModerationDailyStats{Audits: 1, UpstreamCalls: 1}
+	if result.EngineMeta != nil {
+		delta.InputTokens = int64(result.EngineMeta.InputTokens)
+	}
+	if flagged {
+		delta.Flagged = 1
+		if input.riskControlLogOnly {
+			delta.ObserveFlagged = 1
+		}
+	}
+	if blocked {
+		delta.Blocked = 1
+	}
+	s.recordStats(delta)
 	if trackPreBlock {
 		s.recordPreBlockSyncMetric(latency, action)
 	}
