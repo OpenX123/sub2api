@@ -16,6 +16,10 @@
               <Icon name="refresh" size="sm" :class="statusLoading ? 'animate-spin' : ''" />
               {{ t('admin.riskControl.refreshStatus') }}
             </button>
+            <button type="button" class="btn btn-secondary inline-flex items-center gap-2" data-test="open-push-settings" @click="pushDialogOpen = true">
+              <Icon name="bell" size="sm" />
+              {{ t('admin.riskControl.push.open') }}
+            </button>
             <button type="button" class="btn btn-primary inline-flex items-center gap-2" @click="openSettings">
               <Icon name="cog" size="sm" />
               {{ t('admin.riskControl.openSettings') }}
@@ -1153,6 +1157,7 @@
           </div>
         </template>
       </BaseDialog>
+      <RiskControlPushDialog :show="pushDialogOpen" @close="pushDialogOpen = false" />
     </div>
   </AppLayout>
 </template>
@@ -1170,6 +1175,7 @@ import Pagination from '@/components/common/Pagination.vue'
 import ModelWhitelistSelector from '@/components/account/ModelWhitelistSelector.vue'
 import ProxySelector from '@/components/common/ProxySelector.vue'
 import OpenAIFastPolicyUserSelector from '@/views/admin/settings/OpenAIFastPolicyUserSelector.vue'
+import RiskControlPushDialog from '@/views/admin/riskControl/RiskControlPushDialog.vue'
 import { adminAPI } from '@/api/admin'
 import type {
   ContentModerationAPIKeyLoad,
@@ -1250,6 +1256,7 @@ const apiKeyTesting = ref(false)
 const hashActionLoading = ref(false)
 const unbanningUserID = ref<number | null>(null)
 const settingsOpen = ref(false)
+const pushDialogOpen = ref(false)
 const activeSettingsTab = ref<SettingsTab>('basic')
 const groupSearch = ref('')
 const flaggedHashInput = ref('')

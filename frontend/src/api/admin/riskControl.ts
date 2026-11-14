@@ -312,6 +312,43 @@ export async function clearFlaggedHashes(): Promise<ClearFlaggedHashesResponse> 
   return data
 }
 
+export interface PushNotificationConfig {
+  enabled: boolean
+  send_key_configured: boolean
+  send_key_masked: string
+  hit_daily_cap: number
+  hit_window_minutes: number
+  daily_report_enabled: boolean
+  daily_report_hour: number
+  ops_critical_enabled: boolean
+}
+
+export interface UpdatePushNotificationConfig {
+  enabled?: boolean
+  send_key?: string
+  clear_send_key?: boolean
+  hit_daily_cap?: number
+  hit_window_minutes?: number
+  daily_report_enabled?: boolean
+  daily_report_hour?: number
+  ops_critical_enabled?: boolean
+}
+
+export async function getPushConfig(): Promise<PushNotificationConfig> {
+  const { data } = await apiClient.get<PushNotificationConfig>('/admin/risk-control/push/config')
+  return data
+}
+
+export async function updatePushConfig(payload: UpdatePushNotificationConfig): Promise<PushNotificationConfig> {
+  const { data } = await apiClient.put<PushNotificationConfig>('/admin/risk-control/push/config', payload)
+  return data
+}
+
+export async function sendPushTest(): Promise<{ message: string }> {
+  const { data } = await apiClient.post<{ message: string }>('/admin/risk-control/push/test')
+  return data
+}
+
 export const riskControlAPI = {
   getConfig,
   updateConfig,
@@ -321,6 +358,9 @@ export const riskControlAPI = {
   unbanUser,
   deleteFlaggedHash,
   clearFlaggedHashes,
+  getPushConfig,
+  updatePushConfig,
+  sendPushTest,
 }
 
 export default riskControlAPI
