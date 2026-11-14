@@ -12,6 +12,10 @@ const (
 	ContentModerationEngineTypeSafe = "typesafe"
 )
 
+// defaultTypeSafeModerationModel pins a Jev version so tuned thresholds are not
+// silently recalibrated when the jev-latest alias moves.
+const defaultTypeSafeModerationModel = "jev-1.14.0"
+
 type ContentModerationEngineConfig struct {
 	BaseURL    string             `json:"base_url"`
 	Model      string             `json:"model"`
@@ -61,7 +65,7 @@ func validModerationEngine(engine string) bool {
 func moderationEngineDefaults(engine string) *ContentModerationEngineConfig {
 	p := &ContentModerationEngineConfig{BaseURL: defaultContentModerationBaseURL, Model: defaultContentModerationModel, TimeoutMS: 3000, RetryCount: 2, Thresholds: ContentModerationDefaultThresholds()}
 	if engine == ContentModerationEngineTypeSafe {
-		p.BaseURL, p.Model = "https://api.typesafe.ai", "jev-latest"
+		p.BaseURL, p.Model = "https://api.typesafe.ai", defaultTypeSafeModerationModel
 	}
 	return p
 }

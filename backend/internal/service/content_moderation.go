@@ -170,6 +170,7 @@ type ContentModerationConfig struct {
 	HitRetentionDays     int                          `json:"hit_retention_days"`
 	NonHitRetentionDays  int                          `json:"non_hit_retention_days"`
 	PreHashCheckEnabled  bool                         `json:"pre_hash_check_enabled"`
+	VerdictCacheMinutes  int                          `json:"verdict_cache_ttl_minutes"`
 	BlockedKeywords      []string                     `json:"blocked_keywords"`
 	KeywordBlockingMode  string                       `json:"keyword_blocking_mode"`
 	ModelFilter          ContentModerationModelFilter `json:"model_filter"`
@@ -211,6 +212,7 @@ type ContentModerationConfigView struct {
 	HitRetentionDays               int                                     `json:"hit_retention_days"`
 	NonHitRetentionDays            int                                     `json:"non_hit_retention_days"`
 	PreHashCheckEnabled            bool                                    `json:"pre_hash_check_enabled"`
+	VerdictCacheMinutes            int                                     `json:"verdict_cache_ttl_minutes"`
 	BlockedKeywords                []string                                `json:"blocked_keywords"`
 	KeywordBlockingMode            string                                  `json:"keyword_blocking_mode"`
 	ModelFilter                    ContentModerationModelFilter            `json:"model_filter"`
@@ -309,6 +311,7 @@ type UpdateContentModerationConfigInput struct {
 	HitRetentionDays               *int                          `json:"hit_retention_days"`
 	NonHitRetentionDays            *int                          `json:"non_hit_retention_days"`
 	PreHashCheckEnabled            *bool                         `json:"pre_hash_check_enabled"`
+	VerdictCacheMinutes            *int                          `json:"verdict_cache_ttl_minutes"`
 	BlockedKeywords                *[]string                     `json:"blocked_keywords"`
 	KeywordBlockingMode            *string                       `json:"keyword_blocking_mode"`
 	ModelFilter                    *ContentModerationModelFilter `json:"model_filter"`
@@ -549,6 +552,7 @@ type ContentModerationService struct {
 	keyHealthMu              sync.Mutex
 	keyHealth                map[string]*contentModerationKeyHealth
 	statsStore               ContentModerationStatsStore
+	verdictCache             ContentModerationVerdictCache
 	notifier                 ContentModerationNotifier
 	health                   contentModerationHealth
 }
@@ -684,6 +688,9 @@ func (s *ContentModerationService) UpdateConfig(ctx context.Context, input Updat
 	}
 	if input.PreHashCheckEnabled != nil {
 		cfg.PreHashCheckEnabled = *input.PreHashCheckEnabled
+	}
+	if input.VerdictCacheMinutes != nil {
+		cfg.VerdictCacheMinutes = *input.VerdictCacheMinutes
 	}
 	if input.BlockedKeywords != nil {
 		cfg.BlockedKeywords = normalizeBlockedKeywords(*input.BlockedKeywords)
@@ -1100,8 +1107,18 @@ func (s *ContentModerationService) checkSync(ctx context.Context, input ContentM
 		defer s.preBlockActive.Add(-1)
 	}
 	start := time.Now()
-	result, err := s.callModeration(ctx, cfg, content.ModerationInput(), trackPreBlock)
+	result, cached := s.lookupVerdict(cfg, hashText)
+	var err error
+	if !cached {
+		result, err = s.callModeration(ctx, cfg, content.ModerationInput(), trackPreBlock)
+		if err == nil {
+			s.storeVerdict(cfg, hashText, result)
+		}
+	}
 	latency := int(time.Since(start).Milliseconds())
+	if cached {
+		latency = 0
+	}
 	if err != nil {
 		s.recordStats(ContentModerationDailyStats{Audits: 1, UpstreamCalls: 1, Errors: 1})
 		if trackPreBlock {
@@ -1138,6 +1155,9 @@ func (s *ContentModerationService) checkSync(ctx context.Context, input ContentM
 		blocked = true
 	}
 	delta := ContentModerationDailyStats{Audits: 1, UpstreamCalls: 1}
+	if cached {
+		delta.UpstreamCalls, delta.CacheHits = 0, 1
+	}
 	if result.EngineMeta != nil {
 		delta.InputTokens = int64(result.EngineMeta.InputTokens)
 	}
@@ -2224,7 +2244,8 @@ func defaultContentModerationConfig() *ContentModerationConfig {
 		RetryCount:           defaultContentModerationRetryCount,
 		HitRetentionDays:     defaultContentModerationHitRetentionDays,
 		NonHitRetentionDays:  defaultContentModerationNonHitRetentionDays,
-		PreHashCheckEnabled:  false,
+		PreHashCheckEnabled:  true,
+		VerdictCacheMinutes:  defaultContentModerationVerdictCacheMinutes,
 		BlockedKeywords:      []string{},
 		KeywordBlockingMode:  ContentModerationKeywordModeKeywordAndAPI,
 		ModelFilter: ContentModerationModelFilter{
@@ -2332,6 +2353,12 @@ func (cfg *ContentModerationConfig) normalize() {
 	}
 	if cfg.NonHitRetentionDays > maxContentModerationNonHitRetentionDays {
 		cfg.NonHitRetentionDays = maxContentModerationNonHitRetentionDays
+	}
+	if cfg.VerdictCacheMinutes < 0 {
+		cfg.VerdictCacheMinutes = 0
+	}
+	if cfg.VerdictCacheMinutes > maxContentModerationVerdictCacheMinutes {
+		cfg.VerdictCacheMinutes = maxContentModerationVerdictCacheMinutes
 	}
 	cfg.GroupIDs = normalizeInt64IDs(cfg.GroupIDs)
 	cfg.ObserveUserIDs = normalizeInt64IDs(cfg.ObserveUserIDs)
@@ -2584,6 +2611,7 @@ func (s *ContentModerationService) configView(cfg *ContentModerationConfig) *Con
 		HitRetentionDays:               cfg.HitRetentionDays,
 		NonHitRetentionDays:            cfg.NonHitRetentionDays,
 		PreHashCheckEnabled:            cfg.PreHashCheckEnabled,
+		VerdictCacheMinutes:            cfg.VerdictCacheMinutes,
 		BlockedKeywords:                append([]string(nil), cfg.BlockedKeywords...),
 		KeywordBlockingMode:            cfg.KeywordBlockingMode,
 		ModelFilter:                    cloneContentModerationModelFilter(cfg.ModelFilter),

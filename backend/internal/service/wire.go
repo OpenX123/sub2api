@@ -564,10 +564,12 @@ func ProvideContentModerationService(
 	authCacheInvalidator APIKeyAuthCacheInvalidator,
 	emailService *EmailService,
 	statsStore ContentModerationStatsStore,
+	verdictCache ContentModerationVerdictCache,
 	push *PushNotificationService,
 ) *ContentModerationService {
 	svc := NewContentModerationService(settingRepo, repo, hashCache, groupRepo, userRepo, proxyRepo, authCacheInvalidator, emailService)
 	svc.SetStatsStore(statsStore)
+	svc.SetVerdictCache(verdictCache)
 	if push != nil {
 		svc.SetNotifier(push)
 	}
