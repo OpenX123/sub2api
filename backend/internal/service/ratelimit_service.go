@@ -373,6 +373,8 @@ func (s *RateLimitService) HandleUpstreamError(ctx context.Context, account *Acc
 	// otherwise a broad "rate limit" keyword rule can shorten a multi-hour
 	// cooldown to a local temporary pause.
 	if statusCode == http.StatusTooManyRequests && account.Platform == PlatformAnthropic {
+		// 429 也携带最新用量；在窗口限流分支提前返回前保留耗尽时的周额度。
+		s.samplePassiveUsageFromHeaders(ctx, account, headers)
 		// Fable may be rejected because the organization has no usage credits for
 		// this model. Anthropic reports that as 429, but it is a model entitlement
 		// failure rather than a shared account window exhaustion.
@@ -1362,15 +1364,20 @@ func (s *RateLimitService) handle429(ctx context.Context, account *Account, head
 		return
 	}
 
-	// 解析Unix时间戳
-	ts, err := strconv.ParseInt(resetTimestamp, 10, 64)
-	if err != nil {
-		slog.Warn("rate_limit_reset_parse_failed", "reset_timestamp", resetTimestamp, "error", err)
-		s.apply429FallbackRateLimit(ctx, account, "reset_parse_failed")
+	// 聚合头反映的是"绑定 claim"的重置点，不一定是账号的 5h/7d 窗口：
+	// 例如长上下文 "Usage credits are required" 的 429 会带月度额度 claim，
+	// 重置点落在次月 1 日 00:00 UTC。照单全收会把整个账号封到月初（实测 17 天），
+	// 因此与 per-window 头一致，仅接受 (now, now+8d] 内的值，否则走秒级兜底。
+	now := time.Now()
+	resetAt, ok := parseAnthropicAggregateReset(headers, now)
+	if !ok {
+		slog.Warn("rate_limit_reset_out_of_range",
+			"account_id", account.ID,
+			"platform", account.Platform,
+			"reset_timestamp", resetTimestamp)
+		s.apply429FallbackRateLimit(ctx, account, "reset_out_of_range")
 		return
 	}
-
-	resetAt := time.Unix(ts, 0)
 
 	// 标记限流状态
 	s.notifyAccountSchedulingBlocked(account, resetAt, "429")
@@ -1379,11 +1386,13 @@ func (s *RateLimitService) handle429(ctx context.Context, account *Account, head
 		return
 	}
 
-	// 根据重置时间反推5h窗口
-	windowEnd := resetAt
-	windowStart := resetAt.Add(-5 * time.Hour)
-	if err := s.accountRepo.UpdateSessionWindow(ctx, account.ID, &windowStart, &windowEnd, "rejected"); err != nil {
-		slog.Warn("rate_limit_update_session_window_failed", "account_id", account.ID, "error", err)
+	// 仅当重置点落在 5h 窗口量级内才反推 session window，避免把 7d 级重置写成"5 小时窗口"
+	if !resetAt.After(now.Add(6 * time.Hour)) {
+		windowEnd := resetAt
+		windowStart := resetAt.Add(-5 * time.Hour)
+		if err := s.accountRepo.UpdateSessionWindow(ctx, account.ID, &windowStart, &windowEnd, "rejected"); err != nil {
+			slog.Warn("rate_limit_update_session_window_failed", "account_id", account.ID, "error", err)
+		}
 	}
 
 	slog.Info("account_rate_limited", "account_id", account.ID, "reset_at", resetAt)
@@ -1695,10 +1704,6 @@ func (s *RateLimitService) persistAnthropicFableWindowLimit(ctx context.Context,
 	if limit == nil {
 		return false
 	}
-	// 429 响应头本身携带最新的窗口用量（7d_oi utilization=1.0）。限流期内
-	// Fable 请求不再调度到该账号，若不在此处采样，7d F 进度条会冻结在
-	// 限流前的旧值直到窗口重置。
-	s.samplePassiveUsageFromHeaders(ctx, account, headers)
 	if err := s.accountRepo.SetModelRateLimit(ctx, account.ID, anthropicFableRateLimitKey, limit.resetAt, limit.reason); err != nil {
 		slog.Warn("anthropic_fable_window_rate_limit_set_failed",
 			"account_id", account.ID,
@@ -2056,10 +2061,12 @@ func (s *RateLimitService) handle529(ctx context.Context, account *Account) {
 	slog.Info("account_overloaded", "account_id", account.ID, "until", until)
 }
 
-// UpdateSessionWindow 从成功响应更新5h窗口状态
+// UpdateSessionWindow 从成功响应更新5h窗口状态并采样可用的额度窗口。
 func (s *RateLimitService) UpdateSessionWindow(ctx context.Context, account *Account, headers http.Header) {
 	status := headers.Get("anthropic-ratelimit-unified-5h-status")
 	if status == "" {
+		// Ultra 等账号可能仅返回周窗口；不能因缺少 5h 状态而丢弃真实的 7d 用量。
+		s.samplePassiveUsageFromHeaders(ctx, account, headers)
 		return
 	}
 

@@ -19,8 +19,22 @@ func AnthropicToResponses(req *AnthropicRequest) (*ResponsesRequest, error) {
 // AnthropicToResponsesWithMinOutputTokens converts an Anthropic request using
 // the supplied max_output_tokens floor.
 func AnthropicToResponsesWithMinOutputTokens(req *AnthropicRequest, minOutputTokens int) (*ResponsesRequest, error) {
-	if err := openai.ValidateGPT61SolReasoningEffort(req.Model, anthropicReasoningEffort(req)); err != nil {
-		return nil, err
+	return AnthropicToResponsesWithOptions(req, AnthropicToResponsesOptions{MinOutputTokens: minOutputTokens})
+}
+
+// AnthropicToResponsesOptions controls conversion and optional deferred effort
+// validation. Callers deferring validation must validate raw selections before
+// conversion and the final effort after applying their policy.
+type AnthropicToResponsesOptions struct {
+	MinOutputTokens                int
+	DeferReasoningEffortValidation bool
+}
+
+func AnthropicToResponsesWithOptions(req *AnthropicRequest, options AnthropicToResponsesOptions) (*ResponsesRequest, error) {
+	if !options.DeferReasoningEffortValidation {
+		if err := openai.ValidateGPT61ReasoningEffort(req.Model, anthropicReasoningEffort(req)); err != nil {
+			return nil, err
+		}
 	}
 	input, err := convertAnthropicToResponsesInput(req.System, req.Messages)
 	if err != nil {
@@ -56,8 +70,8 @@ func AnthropicToResponsesWithMinOutputTokens(req *AnthropicRequest, minOutputTok
 
 	if req.MaxTokens > 0 {
 		v := req.MaxTokens
-		if v < minOutputTokens {
-			v = minOutputTokens
+		if v < options.MinOutputTokens {
+			v = options.MinOutputTokens
 		}
 		out.MaxOutputTokens = &v
 	}
@@ -302,10 +316,20 @@ func anthropicAssistantToResponses(raw json.RawMessage) ([]ResponsesInputItem, e
 		if sig == "" || strings.HasPrefix(sig, "gAAAA") {
 			continue
 		}
-		items = append(items, ResponsesInputItem{
+		// CC Switch carries a JSON reasoning item in this versioned envelope,
+		// not provider ciphertext. Ignore the foreign state when resuming directly.
+		if strings.HasPrefix(sig, "ccswitch-openai-reasoning-v1:") {
+			continue
+		}
+		item := ResponsesInputItem{
 			Type:             "reasoning",
 			EncryptedContent: sig,
-		})
+			Summary:          []ResponsesSummary{{Type: "summary_text", Text: ""}},
+		}
+		if strings.TrimSpace(b.Thinking) != "" {
+			item.Summary = []ResponsesSummary{{Type: "summary_text", Text: b.Thinking}}
+		}
+		items = append(items, item)
 	}
 
 	// Text content → assistant message with output_text content parts.
@@ -517,34 +541,67 @@ func openAIModelGeneration(model string) (int, bool) {
 }
 
 // normalizeToolParameters ensures the tool parameter schema is valid for
-// OpenAI's Responses API, which requires "properties" on object schemas.
-//
-//   - nil/empty → {"type":"object","properties":{}}
-//   - type=object without properties → adds "properties": {}
-//   - otherwise → returned unchanged
+// OpenAI's Responses API. Object schemas must use an object-valued
+// properties field and an array-valued required field whose names exist in
+// properties. The same rules are applied to nested schemas.
 func normalizeToolParameters(schema json.RawMessage) json.RawMessage {
-	if len(schema) == 0 || string(schema) == "null" {
+	if len(schema) == 0 || string(schema) == "null" || string(schema) == "[]" {
 		return json.RawMessage(`{"type":"object","properties":{}}`)
 	}
 
-	var m map[string]json.RawMessage
-	if err := json.Unmarshal(schema, &m); err != nil {
+	var value any
+	if err := json.Unmarshal(schema, &value); err != nil {
 		return schema
 	}
 
-	typ := m["type"]
-	if string(typ) != `"object"` {
-		return schema
-	}
-
-	if _, ok := m["properties"]; ok {
-		return schema
-	}
-
-	m["properties"] = json.RawMessage(`{}`)
-	out, err := json.Marshal(m)
+	normalized := normalizeToolSchemaValue(value)
+	out, err := json.Marshal(normalized)
 	if err != nil {
 		return schema
 	}
 	return out
+}
+
+func normalizeToolSchemaValue(value any) any {
+	switch current := value.(type) {
+	case []any:
+		for i := range current {
+			current[i] = normalizeToolSchemaValue(current[i])
+		}
+		return current
+	case map[string]any:
+		for key, child := range current {
+			current[key] = normalizeToolSchemaValue(child)
+		}
+
+		if typ, ok := current["type"].(string); ok && typ == "object" {
+			properties, ok := current["properties"].(map[string]any)
+			if !ok || properties == nil {
+				properties = map[string]any{}
+				current["properties"] = properties
+			}
+
+			if required, exists := current["required"]; exists {
+				values, ok := required.([]any)
+				if !ok {
+					current["required"] = []any{}
+					values = []any{}
+				}
+
+				filtered := make([]any, 0, len(values))
+				for _, item := range values {
+					name, ok := item.(string)
+					if ok {
+						if _, exists := properties[name]; exists {
+							filtered = append(filtered, name)
+						}
+					}
+				}
+				current["required"] = filtered
+			}
+		}
+		return current
+	default:
+		return value
+	}
 }

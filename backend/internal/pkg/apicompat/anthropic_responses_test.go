@@ -1,6 +1,7 @@
 package apicompat
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"testing"
 
@@ -193,8 +194,151 @@ func TestAnthropicToResponses_ThinkingSignatureBecomesReasoning(t *testing.T) {
 	require.GreaterOrEqual(t, len(items), 4)
 	assert.Equal(t, "reasoning", items[1].Type)
 	assert.Equal(t, "enc-rs-1", items[1].EncryptedContent)
+	require.Len(t, items[1].Summary, 1)
+	assert.Equal(t, "summary_text", items[1].Summary[0].Type)
+	assert.Equal(t, "plan", items[1].Summary[0].Text)
 	assert.Equal(t, "assistant", items[2].Role)
 	assert.Equal(t, "function_call", items[3].Type)
+}
+
+func TestAnthropicToResponses_MultipleThinkingTurnsPreserveReasoningToolOrder(t *testing.T) {
+	req := &AnthropicRequest{
+		Model: "grok-4.5",
+		Messages: []AnthropicMessage{
+			{Role: "user", Content: json.RawMessage(`"first"`)},
+			{Role: "assistant", Content: json.RawMessage(`[{"type":"thinking","thinking":"plan tool","signature":"enc-1"},{"type":"text","text":"calling"},{"type":"tool_use","id":"toolu_1","name":"lookup","input":{"q":"one"}}]`)},
+			{Role: "user", Content: json.RawMessage(`[{"type":"tool_result","tool_use_id":"toolu_1","content":"result"}]`)},
+			{Role: "assistant", Content: json.RawMessage(`[{"type":"thinking","thinking":"finalize","signature":"enc-2"},{"type":"text","text":"finished"}]`)},
+		},
+	}
+
+	resp, err := AnthropicToResponses(req)
+	require.NoError(t, err)
+	var items []ResponsesInputItem
+	require.NoError(t, json.Unmarshal(resp.Input, &items))
+	require.Len(t, items, 7)
+
+	assert.Equal(t, "message", items[0].Type)
+	assert.Equal(t, "reasoning", items[1].Type)
+	assert.Equal(t, "enc-1", items[1].EncryptedContent)
+	assert.Equal(t, "plan tool", items[1].Summary[0].Text)
+	assert.Equal(t, "message", items[2].Type)
+	assert.Equal(t, "function_call", items[3].Type)
+	assert.Equal(t, "toolu_1", items[3].CallID)
+	assert.Equal(t, "function_call_output", items[4].Type)
+	assert.Equal(t, "toolu_1", items[4].CallID)
+	assert.Equal(t, "reasoning", items[5].Type)
+	assert.Equal(t, "enc-2", items[5].EncryptedContent)
+	assert.Equal(t, "finalize", items[5].Summary[0].Text)
+	assert.Equal(t, "message", items[6].Type)
+}
+
+func TestAnthropicToResponses_ThinkingSignatureOnlyIncludesEmptySummary(t *testing.T) {
+	req := &AnthropicRequest{
+		Model: "grok-4.5",
+		Messages: []AnthropicMessage{
+			{Role: "user", Content: json.RawMessage(`"Hello"`)},
+			{Role: "assistant", Content: json.RawMessage(`[{"type":"thinking","thinking":"","signature":"enc-only"}]`)},
+		},
+	}
+
+	resp, err := AnthropicToResponses(req)
+	require.NoError(t, err)
+	var items []ResponsesInputItem
+	require.NoError(t, json.Unmarshal(resp.Input, &items))
+	require.Len(t, items, 2)
+	require.Equal(t, "reasoning", items[1].Type)
+	require.Len(t, items[1].Summary, 1)
+	assert.Equal(t, "summary_text", items[1].Summary[0].Type)
+	assert.Empty(t, items[1].Summary[0].Text)
+
+	var wire []map[string]any
+	require.NoError(t, json.Unmarshal(resp.Input, &wire))
+	assert.Contains(t, wire[1], "summary")
+	assert.Equal(t, []any{map[string]any{"type": "summary_text", "text": ""}}, wire[1]["summary"])
+}
+
+func TestResponsesInputItem_ReasoningMarshalAlwaysIncludesSummary(t *testing.T) {
+	data, err := json.Marshal(ResponsesInputItem{
+		Type:             "reasoning",
+		EncryptedContent: "enc",
+	})
+	require.NoError(t, err)
+	assert.JSONEq(t, `{"type":"reasoning","encrypted_content":"enc","summary":[]}`, string(data))
+}
+
+func TestResponsesInputItem_ReasoningMarshalPreservesExplicitEmptySummary(t *testing.T) {
+	data, err := json.Marshal(ResponsesInputItem{
+		Type:             "reasoning",
+		EncryptedContent: "enc",
+		Summary:          []ResponsesSummary{},
+	})
+	require.NoError(t, err)
+	assert.JSONEq(t, `{"type":"reasoning","encrypted_content":"enc","summary":[]}`, string(data))
+}
+
+func TestResponsesInputItem_ReasoningMarshalPreservesExistingSummary(t *testing.T) {
+	data, err := json.Marshal(ResponsesInputItem{
+		Type:             "reasoning",
+		EncryptedContent: "enc",
+		Summary:          []ResponsesSummary{{Type: "summary_text", Text: "keep"}},
+	})
+	require.NoError(t, err)
+	assert.JSONEq(t, `{"type":"reasoning","encrypted_content":"enc","summary":[{"type":"summary_text","text":"keep"}]}`, string(data))
+}
+
+func TestResponsesInputItem_NonReasoningMarshalDoesNotIncludeSummary(t *testing.T) {
+	data, err := json.Marshal(ResponsesInputItem{
+		Type:    "message",
+		Role:    "assistant",
+		Summary: []ResponsesSummary{{Type: "summary_text", Text: "must not leak"}},
+	})
+	require.NoError(t, err)
+	assert.NotContains(t, string(data), `"summary"`)
+}
+
+func TestAnthropicToResponses_ForeignReasoningEnvelopePreservesToolHistory(t *testing.T) {
+	envelope := "ccswitch-openai-reasoning-v1:" + base64.RawURLEncoding.EncodeToString([]byte(
+		`{"type":"reasoning","id":"rs_1","summary":[],"encrypted_content":"gAAAA-foreign"}`,
+	))
+	for _, tc := range []struct{ name, signature string }{
+		{"valid envelope", envelope},
+		{"surrounding whitespace", " \n" + envelope + "\t"},
+		{"malformed envelope", "ccswitch-openai-reasoning-v1:not-base64!"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			blocks, err := json.Marshal([]AnthropicContentBlock{
+				{Type: "thinking", Signature: tc.signature},
+				{Type: "thinking", Signature: "native-ciphertext"},
+				{Type: "text", Text: "Checking now."},
+				{Type: "tool_use", ID: "call_1", Name: "lookup", Input: json.RawMessage(`{"key":"value"}`)},
+			})
+			require.NoError(t, err)
+			resp, err := AnthropicToResponses(&AnthropicRequest{
+				Model: "gpt-6.1-sol", MaxTokens: 1024,
+				Messages: []AnthropicMessage{
+					{Role: "user", Content: json.RawMessage(`"Check this"`)},
+					{Role: "assistant", Content: blocks},
+					{Role: "user", Content: json.RawMessage(`[{"type":"tool_result","tool_use_id":"call_1","content":"found"}]`)},
+				},
+			})
+			require.NoError(t, err)
+			var items []ResponsesInputItem
+			require.NoError(t, json.Unmarshal(resp.Input, &items))
+			require.Len(t, items, 5)
+			require.Equal(t, "reasoning", items[1].Type)
+			require.Equal(t, "native-ciphertext", items[1].EncryptedContent)
+			require.Equal(t, "assistant", items[2].Role)
+			require.JSONEq(t, `[{"type":"output_text","text":"Checking now."}]`, string(items[2].Content))
+			require.Equal(t, "function_call", items[3].Type)
+			require.Equal(t, "call_1", items[3].CallID)
+			require.Equal(t, "lookup", items[3].Name)
+			require.JSONEq(t, `{"key":"value"}`, items[3].Arguments)
+			require.Equal(t, "function_call_output", items[4].Type)
+			require.Equal(t, "call_1", items[4].CallID)
+			require.Equal(t, "found", items[4].Output)
+		})
+	}
 }
 
 func TestAnthropicToResponses_MaxTokensFloor(t *testing.T) {
@@ -1567,6 +1711,11 @@ func TestNormalizeToolParameters(t *testing.T) {
 			expected: `{"type":"object","properties":{}}`,
 		},
 		{
+			name:     "array input",
+			input:    json.RawMessage(`[]`),
+			expected: `{"type":"object","properties":{}}`,
+		},
+		{
 			name:     "object without properties",
 			input:    json.RawMessage(`{"type":"object"}`),
 			expected: `{"type":"object","properties":{}}`,
@@ -1577,6 +1726,21 @@ func TestNormalizeToolParameters(t *testing.T) {
 			expected: `{"type":"object","properties":{"city":{"type":"string"}}}`,
 		},
 		{
+			name:     "object with null properties and required",
+			input:    json.RawMessage(`{"type":"object","properties":null,"required":null}`),
+			expected: `{"type":"object","properties":{},"required":[]}`,
+		},
+		{
+			name:     "filters invalid required fields",
+			input:    json.RawMessage(`{"type":"object","properties":{"city":{"type":"string"}},"required":["city","missing",null]}`),
+			expected: `{"type":"object","properties":{"city":{"type":"string"}},"required":["city"]}`,
+		},
+		{
+			name:     "normalizes nested object schema",
+			input:    json.RawMessage(`{"type":"object","properties":{"filter":{"type":"object","properties":null,"required":null}}}`),
+			expected: `{"type":"object","properties":{"filter":{"type":"object","properties":{},"required":[]}}}`,
+		},
+		{
 			name:     "non-object type",
 			input:    json.RawMessage(`{"type":"string"}`),
 			expected: `{"type":"string"}`,
@@ -1584,7 +1748,7 @@ func TestNormalizeToolParameters(t *testing.T) {
 		{
 			name:     "object with additional fields preserved",
 			input:    json.RawMessage(`{"type":"object","required":["name"]}`),
-			expected: `{"type":"object","required":["name"],"properties":{}}`,
+			expected: `{"type":"object","required":[],"properties":{}}`,
 		},
 		{
 			name:     "invalid JSON passthrough",

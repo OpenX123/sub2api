@@ -139,6 +139,17 @@ func TestResponsesToAnthropic_DefaultToolNormalizesInputSchema(t *testing.T) {
 	assert.JSONEq(t, `{"type":"object","properties":{}}`, string(tools[0].InputSchema))
 }
 
+func TestResponsesToAnthropic_ArrayToolSchemaNormalizesToObject(t *testing.T) {
+	tools := convertResponsesToAnthropicTools([]ResponsesTool{{
+		Type:       "function",
+		Name:       "empty_args",
+		Parameters: json.RawMessage(`[]`),
+	}})
+
+	require.Len(t, tools, 1)
+	assert.JSONEq(t, `{"type":"object","properties":{}}`, string(tools[0].InputSchema))
+}
+
 // Codex 的 codex_app 命名空间工具（如 automation_update）把 parameters 根节点声明为
 // 对象分支的 oneOf/anyOf；Anthropic 拒绝 input_schema 顶层的 oneOf/anyOf/allOf，
 // 转换时必须摊平成单个 object schema。

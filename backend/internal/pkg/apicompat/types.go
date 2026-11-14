@@ -7,6 +7,7 @@ package apicompat
 import (
 	"bytes"
 	"encoding/json"
+	"strings"
 )
 
 // ---------------------------------------------------------------------------
@@ -274,7 +275,8 @@ type ResponsesInputItem struct {
 	Content json.RawMessage `json:"content,omitempty"` // string or []ResponsesContentPart
 
 	// type=reasoning (multi-turn replay of encrypted reasoning)
-	EncryptedContent string `json:"encrypted_content,omitempty"`
+	EncryptedContent string             `json:"encrypted_content,omitempty"`
+	Summary          []ResponsesSummary `json:"summary,omitempty"`
 
 	// type=function_call
 	CallID    string `json:"call_id,omitempty"`
@@ -285,6 +287,32 @@ type ResponsesInputItem struct {
 	// type=function_call_output
 	Output    string `json:"output,omitempty"`
 	outputRaw json.RawMessage
+}
+
+// MarshalJSON keeps Responses reasoning input items protocol-compliant. The
+// Responses API requires every type=reasoning item to include summary, even
+// when no visible summary text is available. A custom wire shape is used here
+// because omitempty would otherwise remove an intentionally empty array.
+func (i ResponsesInputItem) MarshalJSON() ([]byte, error) {
+	type responsesInputItemAlias ResponsesInputItem
+	if strings.TrimSpace(i.Type) != "reasoning" {
+		// Summary is meaningful only for reasoning items. Do not leak it onto
+		// message/function-call items if a caller reused a struct value.
+		i.Summary = nil
+		return json.Marshal(responsesInputItemAlias(i))
+	}
+
+	summary := i.Summary
+	if summary == nil {
+		summary = []ResponsesSummary{}
+	}
+	return json.Marshal(struct {
+		responsesInputItemAlias
+		Summary []ResponsesSummary `json:"summary"`
+	}{
+		responsesInputItemAlias: responsesInputItemAlias(i),
+		Summary:                 summary,
+	})
 }
 
 func (i *ResponsesInputItem) UnmarshalJSON(data []byte) error {
@@ -417,6 +445,9 @@ type ResponsesOutput struct {
 	Arguments string `json:"arguments,omitempty"`
 	// 来源为 namespace 子工具时的归属命名空间（codex 按 namespace+name 路由该调用）。
 	Namespace string `json:"namespace,omitempty"`
+	// Preserve the upstream encryption marker, including explicit null/[];
+	// omitting it can make sealed arguments appear to be plaintext.
+	EncryptedFunctionArgs json.RawMessage `json:"encrypted_function_args,omitempty"`
 
 	// type=custom_tool_call（custom/freeform 工具，input 为自由文本）
 	Input string `json:"input,omitempty"`
@@ -425,26 +456,14 @@ type ResponsesOutput struct {
 	Action *WebSearchAction `json:"action,omitempty"`
 }
 
-// MarshalJSON 处理 tool_search_call 项的线上形态（复用 CallID/Arguments 字段）：
-// execution 固定为 "client"（codex 的必填字段，非 client 的调用会被静默忽略），
-// arguments 是 JSON 对象而非 function_call 语义下的字符串。其余类型走默认结构体
-// 序列化，输出逐字节不变。
+// MarshalJSON keeps message and tool_search_call items consistent with their
+// streamed representation. Other output types retain their default encoding.
 func (o ResponsesOutput) MarshalJSON() ([]byte, error) {
+	if o.Type == "message" || o.Type == "tool_search_call" {
+		return json.Marshal(responsesItemWire(&o))
+	}
 	type responsesOutputAlias ResponsesOutput
-	if o.Type != "tool_search_call" {
-		return json.Marshal(responsesOutputAlias(o))
-	}
-	m := map[string]any{
-		"type":      o.Type,
-		"id":        o.ID,
-		"call_id":   o.CallID,
-		"execution": "client",
-		"arguments": toolSearchCallArgumentsJSON(o.Arguments),
-	}
-	if o.Status != "" {
-		m["status"] = o.Status
-	}
-	return json.Marshal(m)
+	return json.Marshal(responsesOutputAlias(o))
 }
 
 // UnmarshalJSON accepts both the Responses function-call string form and the

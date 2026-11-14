@@ -93,6 +93,11 @@ func (s *OpenAIGatewayService) forwardGrokResponses(
 	if err != nil {
 		return nil, fmt.Errorf("apply grok Free function-tool cache route: %w", err)
 	}
+	if normalizedBody, changed, summaryErr := ensureResponsesReasoningSummary(patchedBody); summaryErr != nil {
+		return nil, fmt.Errorf("ensure Responses reasoning summary: %w", summaryErr)
+	} else if changed {
+		patchedBody = normalizedBody
+	}
 
 	token, _, err := s.getRequestCredential(ctx, c, account)
 	if err != nil {
@@ -218,9 +223,9 @@ func (s *OpenAIGatewayService) forwardGrokResponses(
 		if s.cfg != nil && s.cfg.Gateway.MaxLineSize > 0 {
 			maxLineSize = s.cfg.Gateway.MaxLineSize
 		}
-		resp.Body = newGrokResponsesBillingPingFilterBody(resp.Body, account, maxLineSize)
+		resp.Body = newGrokResponsesBillingPingFilterBody(resp.Body, account, maxLineSize, s.cfg)
 		if hasGrokResponsesClientToolMapping(clientToolMapping) {
-			resp.Body = newGrokResponsesClientToolStreamBody(resp.Body, clientToolMapping, maxLineSize)
+			resp.Body = newGrokResponsesClientToolStreamBody(resp.Body, clientToolMapping, maxLineSize, s.cfg)
 		}
 		streamResult, err := s.handleStreamingResponse(ctx, resp, c, account, startTime, originalModel, upstreamModel)
 		if err != nil {

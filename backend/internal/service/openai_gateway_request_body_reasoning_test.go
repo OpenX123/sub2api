@@ -200,6 +200,23 @@ func TestTrimOpenAIEncryptedReasoningItems_ContentNullDropsBareSkeleton(t *testi
 	assert.False(t, hasInput, "bare reasoning skeleton should be dropped, emptying input")
 }
 
+func TestTrimOpenAIEncryptedReasoningItems_EmptySummaryDropsBareSkeleton(t *testing.T) {
+	reqBody := map[string]any{
+		"input": []any{
+			map[string]any{
+				"type":              "reasoning",
+				"encrypted_content": "cipher",
+				"summary":           []any{},
+			},
+		},
+	}
+
+	changed := trimOpenAIEncryptedReasoningItems(reqBody)
+	assert.True(t, changed)
+	_, hasInput := reqBody["input"]
+	assert.False(t, hasInput, "reasoning with only an empty summary after encrypted content removal should be dropped")
+}
+
 func TestNormalizeOpenAIAPIKeyStoreFalseReasoningReplay(t *testing.T) {
 	body := []byte(`{"model":"gpt-5.5","store":false,"input":[` +
 		`{"type":"reasoning","id":"rs_encrypted","call_id":"remove","encrypted_content":"cipher","summary":null,"opaque":9007199254740993},` +

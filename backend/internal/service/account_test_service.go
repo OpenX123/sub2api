@@ -547,7 +547,7 @@ func (s *AccountTestService) testClaudeAccountConnection(c *gin.Context, account
 		if err != nil {
 			return s.sendErrorAndEnd(c, fmt.Sprintf("Invalid base URL: %s", err.Error()))
 		}
-		apiURL = strings.TrimSuffix(normalizedBaseURL, "/") + "/v1/messages?beta=true"
+		apiURL = buildAnthropicMessagesURL(normalizedBaseURL)
 	} else {
 		return s.sendErrorAndEnd(c, fmt.Sprintf("Unsupported account type: %s", account.Type))
 	}
@@ -812,6 +812,12 @@ func (s *AccountTestService) testOpenAIAccountConnection(c *gin.Context, account
 	// /responses wire and does NOT apply the legacy compact-only mapping
 	// (post-#5641 semantics: compact_model_mapping is /responses/compact-only).
 	testModelID = account.GetMappedModel(testModelID)
+	if modelID == "" && account.Type == AccountTypeAPIKey {
+		if target, err := url.Parse(account.GetOpenAIBaseURL()); err == nil && target.Scheme == "https" && strings.EqualFold(target.Hostname(), "opencode.ai") {
+			// This helper returns an upstream model, which must not be mapped again.
+			testModelID = selectResponsesProbeModel(account)
+		}
+	}
 	if mode == AccountTestModeCompact {
 		return s.testOpenAICompactConnection(c, account, testModelID)
 	}
@@ -944,6 +950,15 @@ func (s *AccountTestService) testOpenAIAccountConnection(c *gin.Context, account
 
 	// 账号级请求头覆写：测试请求与真实转发保持一致的最终头
 	credentialAccount.ApplyHeaderOverrides(req.Header)
+
+	// A synthetic account test is its own conversation. Preserve caller affinity
+	// when supplied, otherwise allocate a session for this probe only.
+	if !isOAuth && req.URL.Scheme == "https" && strings.EqualFold(req.URL.Hostname(), "opencode.ai") {
+		applyOpenCodeSessionHeader(c, credentialAccount, apiURL, req.Header)
+		if strings.TrimSpace(req.Header.Get(openCodeSessionHeader)) == "" {
+			req.Header.Set(openCodeSessionHeader, "sub2api-probe-"+uuid.NewString())
+		}
+	}
 
 	// Get proxy URL
 	proxyURL := ""
@@ -3054,11 +3069,14 @@ func (s *AccountTestService) testOpenAIImageAPIKey(c *gin.Context, ctx context.C
 
 	s.sendEvent(c, TestEvent{Type: "test_start", Model: modelID})
 
+	// GPT Image models return base64 images by default and reject response_format.
 	payload := map[string]any{
-		"model":           modelID,
-		"prompt":          prompt,
-		"n":               1,
-		"response_format": "b64_json",
+		"model":  modelID,
+		"prompt": prompt,
+		"n":      1,
+	}
+	if size := account.OpenAIImageTestSize(); size != "" {
+		payload["size"] = size
 	}
 	payloadBytes, _ := json.Marshal(payload)
 
@@ -3156,7 +3174,9 @@ func (s *AccountTestService) testOpenAIImageOAuth(c *gin.Context, ctx context.Co
 		Endpoint: openAIImagesGenerationsEndpoint,
 		Model:    strings.TrimSpace(modelID),
 		Prompt:   prompt,
+		Size:     account.OpenAIImageTestSize(),
 	}
+	parsed.ExplicitSize = parsed.Size != ""
 	applyOpenAIImagesDefaults(parsed)
 
 	upstreamModel := account.GetMappedModel(parsed.Model)
