@@ -41,6 +41,10 @@ type ContentModerationEngineMeta struct {
 	Model         string `json:"model"`
 	RulesVersion  string `json:"rules_version"`
 	SkippedImages int    `json:"skipped_images"`
+	// InputTokens is the billable input token count reported by the engine (TypeSafe only).
+	InputTokens int `json:"input_tokens,omitempty"`
+	// Cached marks a verdict served from the verdict cache without calling the engine.
+	Cached bool `json:"cached,omitempty"`
 }
 
 func moderationEngine(engine string) string {

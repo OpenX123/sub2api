@@ -77,6 +77,7 @@ func (s *ContentModerationService) callTypeSafeModeration(ctx context.Context, c
 	}
 	return &moderationAPIResult{CategoryScores: result.Scores, EngineMeta: &ContentModerationEngineMeta{
 		Engine: ContentModerationEngineTypeSafe, Model: result.Model, RulesVersion: TypeSafeModerationRulesVersion, SkippedImages: skipped,
+		InputTokens: result.Usage.InputTokens,
 	}}, nil
 }
 
