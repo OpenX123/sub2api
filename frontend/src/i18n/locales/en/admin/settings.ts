@@ -85,7 +85,7 @@ export default {
           cyberSessionBlock: 'Cyber session auto-block',
           cyberSessionBlockHint: 'When enabled, sessions hit by upstream cyber_policy are blocked locally for the TTL and no longer forwarded. Only the offending session is blocked; other sessions on the same key are unaffected.',
           riskControlUserAllowlist: 'Risk control allowlist',
-          riskControlUserAllowlistHint: 'Enter any email keyword to search for matching users. Allowlisted users will not trigger account bans or local blocking, but upstream restrictions still apply. This feature is typically used for trusted downstream relays.',
+          riskControlUserAllowlistHint: 'Enter any email keyword to search for matching users. The allowlist only affects OpenAI upstream cyber_policy: no bans or local session blocks, but upstream restrictions still apply. Content moderation no longer exempts these users; use the audit observe list in Risk Control for an observation period.',
           cyberSessionBlockTTL: 'Block TTL (seconds)',
         },
         affiliate: {

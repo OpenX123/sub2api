@@ -7,6 +7,8 @@ export interface ModerationEngineMeta {
   model: string
   rules_version: string
   skipped_images: number
+  input_tokens?: number
+  cached?: boolean
 }
 export type KeywordBlockingMode = 'keyword_only' | 'keyword_and_api' | 'api_only'
 export type ContentModerationModelFilterType = 'all' | 'include' | 'exclude'
@@ -33,6 +35,8 @@ export interface ContentModerationConfig {
   sample_rate: number
   all_groups: boolean
   group_ids: number[]
+  observe_user_ids: number[]
+  verdict_cache_ttl_minutes: number
   record_non_hits: boolean
   thresholds: Record<string, number>
   worker_count: number
@@ -118,6 +122,8 @@ export interface UpdateContentModerationConfig {
   sample_rate?: number
   all_groups?: boolean
   group_ids?: number[]
+  observe_user_ids?: number[]
+  verdict_cache_ttl_minutes?: number
   record_non_hits?: boolean
   thresholds?: Record<string, number>
   worker_count?: number

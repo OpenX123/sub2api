@@ -85,7 +85,7 @@ export default {
           cyberSessionBlock: 'cyber 会话自动屏蔽',
           cyberSessionBlockHint: '开启后,被上游网络安全策略(cyber_policy)拦截的会话将在 TTL 内被本地屏蔽,不再发往上游。仅屏蔽该会话,不影响同 Key 其他会话。',
           riskControlUserAllowlist: '风控白名单',
-          riskControlUserAllowlistHint: '输入任意邮箱关键词进行模糊搜索。 白名单中的用户不会触发封号或本地屏蔽，但仍然无法突破上游拦截。该功能通常用于可信的下游中转站。',
+          riskControlUserAllowlistHint: '输入任意邮箱关键词进行模糊搜索。白名单只影响 OpenAI 上游 cyber_policy：不会触发封号或本地会话屏蔽，但仍然无法突破上游拦截。内容审计不再豁免白名单用户，如需观察期请使用风控中心的“审计观察名单”。',
           cyberSessionBlockTTL: '屏蔽时长(秒)',
         },
         affiliate: {

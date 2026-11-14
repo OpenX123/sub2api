@@ -421,7 +421,7 @@
               </div>
               <div>
                 <label class="input-label">{{ t('admin.riskControl.model') }}</label>
-                <input v-model.trim="configForm.model" data-test="audit-model" type="text" class="input" :placeholder="configForm.engine === 'typesafe' ? 'jev-latest' : 'omni-moderation-latest'" />
+                <input v-model.trim="configForm.model" data-test="audit-model" type="text" class="input" :placeholder="configForm.engine === 'typesafe' ? 'jev-1.14.0' : 'omni-moderation-latest'" />
               </div>
               <div>
                 <label class="input-label">{{ t('admin.riskControl.timeoutMs') }}</label>
@@ -818,6 +818,12 @@
                 </p>
               </div>
             </div>
+
+            <div class="space-y-2 rounded-lg border border-gray-100 p-4 dark:border-dark-700">
+              <p class="text-sm font-medium text-gray-900 dark:text-white">{{ t('admin.riskControl.observeUsers') }}</p>
+              <p class="text-xs text-gray-500 dark:text-gray-400">{{ t('admin.riskControl.observeUsersHint') }}</p>
+              <OpenAIFastPolicyUserSelector v-model="configForm.observe_user_ids" data-test="observe-users-selector" />
+            </div>
           </div>
 
           <div v-else-if="activeSettingsTab === 'runtime'" class="grid grid-cols-1 gap-5 lg:grid-cols-2">
@@ -828,6 +834,11 @@
             <div>
               <label class="input-label">{{ t('admin.riskControl.queueSize') }}</label>
               <input v-model.number="configForm.queue_size" type="number" min="100" max="100000" class="input" />
+            </div>
+            <div>
+              <label class="input-label">{{ t('admin.riskControl.verdictCacheTTL') }}</label>
+              <input v-model.number="configForm.verdict_cache_ttl_minutes" type="number" min="0" max="10080" class="input" data-test="verdict-cache-ttl-input" />
+              <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ t('admin.riskControl.verdictCacheTTLHint') }}</p>
             </div>
             <div class="flex items-center justify-between rounded-lg border border-gray-100 p-4 dark:border-dark-700 lg:col-span-2">
               <div>
@@ -1149,6 +1160,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, reactive, ref, toRaw } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useRoute } from 'vue-router'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import BaseDialog from '@/components/common/BaseDialog.vue'
 import Icon from '@/components/icons/Icon.vue'
@@ -1157,6 +1169,7 @@ import Toggle from '@/components/common/Toggle.vue'
 import Pagination from '@/components/common/Pagination.vue'
 import ModelWhitelistSelector from '@/components/account/ModelWhitelistSelector.vue'
 import ProxySelector from '@/components/common/ProxySelector.vue'
+import OpenAIFastPolicyUserSelector from '@/views/admin/settings/OpenAIFastPolicyUserSelector.vue'
 import { adminAPI } from '@/api/admin'
 import type {
   ContentModerationAPIKeyLoad,
@@ -1276,6 +1289,8 @@ const configForm = reactive({
   sample_rate: 100,
   all_groups: true,
   group_ids: [] as number[],
+  observe_user_ids: [] as number[],
+  verdict_cache_ttl_minutes: 1440,
   record_non_hits: false,
   worker_count: 4,
   queue_size: 32768,
@@ -1321,7 +1336,7 @@ function switchEngine(value: string | number | boolean | null) {
 function engineDraftFromConfig(config: ContentModerationConfig | undefined, engine: ModerationEngine): EngineDraft {
   return {
     base_url: config?.base_url || (engine === 'typesafe' ? 'https://api.typesafe.ai' : 'https://api.openai.com'),
-    model: config?.model || (engine === 'typesafe' ? 'jev-latest' : 'omni-moderation-latest'),
+    model: config?.model || (engine === 'typesafe' ? 'jev-1.14.0' : 'omni-moderation-latest'),
     proxy_id: config?.proxy_id ?? null, api_keys_text: '', api_key_configured: config?.api_key_configured ?? false,
     api_key_masked: config?.api_key_masked ?? '', api_key_count: config?.api_key_count ?? 0,
     api_key_masks: [...(config?.api_key_masks ?? [])], api_key_statuses: [...(config?.api_key_statuses ?? [])],
@@ -1358,6 +1373,13 @@ const filters = reactive({
   from: '',
   to: '',
 })
+
+// Push notifications link to /admin/risk-control?search=<request_id>.
+const route = useRoute()
+const initialSearch = route?.query?.search
+if (typeof initialSearch === 'string' && initialSearch.trim() !== '') {
+  filters.search = initialSearch.trim()
+}
 
 const settingsTabs = computed<Array<{ id: SettingsTab; label: string }>>(() => [
   { id: 'basic', label: t('admin.riskControl.tabs.basic') },
@@ -1803,6 +1825,8 @@ function applyConfig(config: ContentModerationConfig) {
   configForm.sample_rate = config.sample_rate ?? 100
   configForm.all_groups = config.all_groups
   configForm.group_ids = Array.isArray(config.group_ids) ? [...config.group_ids] : []
+  configForm.observe_user_ids = Array.isArray(config.observe_user_ids) ? [...config.observe_user_ids] : []
+  configForm.verdict_cache_ttl_minutes = typeof config.verdict_cache_ttl_minutes === 'number' ? config.verdict_cache_ttl_minutes : 1440
   configForm.record_non_hits = config.record_non_hits
   configForm.worker_count = config.worker_count || 4
   configForm.queue_size = config.queue_size || 32768
@@ -1896,6 +1920,8 @@ async function saveConfig() {
       sample_rate: Number(configForm.sample_rate) || 0,
       all_groups: configForm.all_groups,
       group_ids: configForm.all_groups ? [] : [...configForm.group_ids],
+      observe_user_ids: [...configForm.observe_user_ids],
+      verdict_cache_ttl_minutes: Math.max(0, Math.min(10080, Number(configForm.verdict_cache_ttl_minutes) || 0)),
       record_non_hits: configForm.record_non_hits,
       clear_api_key: configForm.clear_api_key,
       worker_count: Number(configForm.worker_count) || 4,

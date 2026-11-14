@@ -90,6 +90,8 @@ const baseConfig = (): ContentModerationConfig => ({
   sample_rate: 100,
   all_groups: true,
   group_ids: [],
+  observe_user_ids: [16],
+  verdict_cache_ttl_minutes: 1440,
   record_non_hits: false,
   worker_count: 4,
   queue_size: 32768,
@@ -281,7 +283,7 @@ describe('admin RiskControlView', () => {
     const engine = () => wrapper.findComponent('[data-test="audit-engine-select"]')
     engine().vm.$emit('update:modelValue', 'typesafe')
     await flushPromises()
-    expect((wrapper.get('[data-test="audit-model"]').element as HTMLInputElement).value).toBe('jev-latest')
+    expect((wrapper.get('[data-test="audit-model"]').element as HTMLInputElement).value).toBe('jev-1.14.0')
     await wrapper.get('[data-test="audit-base-url"]').setValue('https://typesafe-edited.example')
     await findButtonByText(wrapper, 'admin.riskControl.tabs.riskThresholds').trigger('click')
     expect((wrapper.get('[data-test="risk-threshold-sexual"]').element as HTMLInputElement).value).toBe('65')
@@ -310,7 +312,7 @@ describe('admin RiskControlView', () => {
     await wrapper.get('textarea[autocomplete="new-password"]').setValue('test-only-key')
     await findButtonByText(wrapper, 'admin.riskControl.testInputApiKeys').trigger('click')
     await flushPromises()
-    expect(testAPIKeys).toHaveBeenCalledWith(expect.objectContaining({ engine: 'typesafe', api_keys: ['test-only-key'], model: 'jev-latest', thresholds: expect.objectContaining({ sexual: 0.65 }) }))
+    expect(testAPIKeys).toHaveBeenCalledWith(expect.objectContaining({ engine: 'typesafe', api_keys: ['test-only-key'], model: 'jev-1.14.0', thresholds: expect.objectContaining({ sexual: 0.65 }) }))
     expect(updateConfig).not.toHaveBeenCalled()
     expect(wrapper.get('[data-test="active-audit-engine"]').text()).not.toContain('TypeSafe AI')
     wrapper.unmount()
@@ -534,5 +536,37 @@ describe('admin RiskControlView', () => {
       'max-h-[280px]',
       'overflow-y-auto',
     ]))
+  })
+
+  it('saves observe users and verdict cache ttl', async () => {
+    const ObserveSelectorStub = defineComponent({
+      props: { modelValue: { type: Array, default: () => [] } },
+      emits: ['update:modelValue'],
+      setup(props) {
+        return () => h('div', { 'data-test': 'observe-users-selector', 'data-value': JSON.stringify(props.modelValue) })
+      },
+    })
+    const wrapper = mount(RiskControlView, {
+      global: {
+        stubs: {
+          AppLayout: AppLayoutStub, BaseDialog: BaseDialogStub, Icon: true, Select: true, Toggle: true, Pagination: true,
+          ModelWhitelistSelector: ModelWhitelistSelectorStub, ProxySelector: true, OpenAIFastPolicyUserSelector: ObserveSelectorStub,
+        },
+      },
+    })
+    await flushPromises()
+
+    await findButtonByText(wrapper, 'admin.riskControl.openSettings').trigger('click')
+    await findButtonByText(wrapper, 'admin.riskControl.tabs.scope').trigger('click')
+    const selector = wrapper.findComponent(ObserveSelectorStub)
+    expect(selector.attributes('data-value')).toBe('[16]')
+    selector.vm.$emit('update:modelValue', [16, 22])
+    await findButtonByText(wrapper, 'admin.riskControl.tabs.runtime').trigger('click')
+    await wrapper.get('[data-test="verdict-cache-ttl-input"]').setValue('60')
+    await findButtonByText(wrapper, 'admin.riskControl.saveConfig').trigger('click')
+    await flushPromises()
+
+    expect(updateConfig).toHaveBeenCalledWith(expect.objectContaining({ observe_user_ids: [16, 22], verdict_cache_ttl_minutes: 60 }))
+    expect(showError).not.toHaveBeenCalled()
   })
 })
