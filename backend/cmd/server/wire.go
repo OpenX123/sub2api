@@ -132,6 +132,7 @@ func provideCleanup(
 	promptAudit *securityaudit.PromptService,
 	pluginManager *service.PluginManager,
 	pushNotification *service.PushNotificationService,
+	moderationDailyReport *service.ContentModerationDailyReportService,
 ) func() {
 	return func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -144,6 +145,12 @@ func provideCleanup(
 
 		// 应用层清理步骤可并行执行，基础设施资源（Redis/Ent）最后按顺序关闭。
 		parallelSteps := []cleanupStep{
+			{"ContentModerationDailyReportService", func() error {
+				if moderationDailyReport != nil {
+					moderationDailyReport.Stop()
+				}
+				return nil
+			}},
 			{"PushNotificationService", func() error {
 				if pushNotification != nil {
 					pushNotification.Stop()

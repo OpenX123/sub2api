@@ -576,6 +576,18 @@ func ProvideContentModerationService(
 	return svc
 }
 
+// ProvideContentModerationDailyReportService creates and starts the daily push report.
+func ProvideContentModerationDailyReportService(
+	push *PushNotificationService,
+	stats ContentModerationStatsStore,
+	reports ContentModerationReportRepository,
+	pushStore PushNotificationStore,
+) *ContentModerationDailyReportService {
+	svc := NewContentModerationDailyReportService(push, stats, reports, pushStore)
+	svc.Start()
+	return svc
+}
+
 // ProvidePushNotificationService creates and starts the ServerChan push service.
 func ProvidePushNotificationService(settingRepo SettingRepository, store PushNotificationStore) *PushNotificationService {
 	svc := NewPushNotificationService(settingRepo, store, serverchan.NewClient(&http.Client{Timeout: 10 * time.Second}))
@@ -1014,6 +1026,7 @@ var ProviderSet = wire.NewSet(
 	NewModelPlazaService,
 	ProvideContentModerationService,
 	ProvidePushNotificationService,
+	ProvideContentModerationDailyReportService,
 	NewAffiliateService,
 	ProvidePaymentConfigService,
 	ProvidePaymentService,
