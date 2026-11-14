@@ -51,3 +51,11 @@
 4. 运营给 TypeSafe 充值后：模型固定为 `jev-1.14.0`，打开违规哈希预检，确认观察名单为 16、2、22，打开审计。这一步需要用户再确认。
 5. 观察 3 天。
 6. 清空观察名单，正式开拦。这一步需要用户再确认。
+
+## 验证记录（2026-11-15，v0.2.23）
+
+- 后端：`go test -tags=unit ./...` 仅 2 条与本次无关的失败——`TestOllamaProbeCallback_StaleLongDoesNotOverrideNewShort` 在改动前基线上同样稳定失败（Windows 时间精度）；`TestCommandCodeGatewayPassesThroughCatalogProtocols` 单独运行通过（偶发）。改动涉及的 service / repository / handler / routes / migrations / cmd/server 包全部通过。
+- 迁移 `248a` 在独立的 postgres:18.4 容器中验证：白名单去重排序写入、显式空列表不覆盖、非法 JSON 跳过。
+- 前端：vitest 全量 376 文件 / 3021 用例通过，`vue-tsc --noEmit` 通过。
+- 本地 golangci-lint v2.13.2 对 stdlib 依赖包报 export data 版本错误（已有上游包同样报错，属本机环境问题），其余包 0 issues；以 CI lint 为准。
+- 审计后移（Task 12）按 D13 不做，上线一周后看日报数据再评估。
