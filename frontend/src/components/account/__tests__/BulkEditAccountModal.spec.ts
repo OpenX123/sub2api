@@ -1039,4 +1039,43 @@ describe('BulkEditAccountModal', () => {
       }
     })
   })
+  it('Anthropic OAuth 批量开启缓存 TTL 强制替换并选 1h', async () => {
+    const wrapper = mountModal({
+      selectedPlatforms: ['anthropic'],
+      selectedTypes: ['oauth', 'setup-token']
+    })
+
+    await wrapper.get('#bulk-edit-cache-ttl-override-enabled').setValue(true)
+    await wrapper.get('[data-testid="bulk-edit-cache-ttl-override-toggle"]').trigger('click')
+    await wrapper.get('[data-testid="bulk-edit-cache-ttl-override-target"]').setValue('1h')
+    await wrapper.get('#bulk-edit-account-form').trigger('submit.prevent')
+    await flushPromises()
+
+    expect(adminAPI.accounts.bulkUpdate).toHaveBeenCalledWith([1, 2], {
+      extra: { cache_ttl_override_enabled: true, cache_ttl_override_target: '1h' }
+    })
+  })
+
+  it('仅勾选缓存 TTL 强制替换但不打开时显式提交关闭', async () => {
+    const wrapper = mountModal({
+      selectedPlatforms: ['anthropic'],
+      selectedTypes: ['oauth']
+    })
+
+    await wrapper.get('#bulk-edit-cache-ttl-override-enabled').setValue(true)
+    await wrapper.get('#bulk-edit-account-form').trigger('submit.prevent')
+    await flushPromises()
+
+    expect(adminAPI.accounts.bulkUpdate).toHaveBeenCalledWith([1, 2], {
+      extra: { cache_ttl_override_enabled: false, cache_ttl_override_target: '5m' }
+    })
+  })
+
+  it('非 Anthropic OAuth 时不展示缓存 TTL 强制替换', () => {
+    const wrapper = mountModal({
+      selectedPlatforms: ['anthropic'],
+      selectedTypes: ['apikey']
+    })
+    expect(wrapper.find('#bulk-edit-cache-ttl-override-enabled').exists()).toBe(false)
+  })
 })

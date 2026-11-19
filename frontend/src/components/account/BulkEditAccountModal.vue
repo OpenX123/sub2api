@@ -1431,6 +1431,67 @@
         </div>
       </div>
 
+      <!-- Cache TTL Override (仅全部为 Anthropic OAuth/SetupToken 时显示) -->
+      <div v-if="allAnthropicOAuthOrSetupToken" class="border-t border-gray-200 pt-4 dark:border-dark-600">
+        <div class="mb-3 flex items-center justify-between">
+          <label
+            id="bulk-edit-cache-ttl-override-label"
+            class="input-label mb-0"
+            for="bulk-edit-cache-ttl-override-enabled"
+          >
+            {{ t('admin.accounts.quotaControl.cacheTTLOverride.label') }}
+          </label>
+          <input
+            v-model="enableCacheTTLOverride"
+            id="bulk-edit-cache-ttl-override-enabled"
+            type="checkbox"
+            aria-controls="bulk-edit-cache-ttl-override-body"
+            class="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+          />
+        </div>
+
+        <div
+          id="bulk-edit-cache-ttl-override-body"
+          :class="!enableCacheTTLOverride && 'pointer-events-none opacity-50'"
+          role="group"
+          aria-labelledby="bulk-edit-cache-ttl-override-label"
+        >
+          <div class="flex items-center justify-between">
+            <span class="text-sm text-gray-700 dark:text-gray-300">{{ t('admin.accounts.quotaControl.cacheTTLOverride.hint') }}</span>
+            <button
+              type="button"
+              data-testid="bulk-edit-cache-ttl-override-toggle"
+              @click="cacheTTLOverrideEnabled = !cacheTTLOverrideEnabled"
+              :class="[
+                'relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2',
+                cacheTTLOverrideEnabled ? 'bg-primary-600' : 'bg-gray-200 dark:bg-dark-600'
+              ]"
+            >
+              <span
+                :class="[
+                  'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out',
+                  cacheTTLOverrideEnabled ? 'translate-x-5' : 'translate-x-0'
+                ]"
+              />
+            </button>
+          </div>
+          <div v-if="cacheTTLOverrideEnabled" class="mt-3">
+            <label class="input-label text-xs">{{ t('admin.accounts.quotaControl.cacheTTLOverride.target') }}</label>
+            <select
+              v-model="cacheTTLOverrideTarget"
+              data-testid="bulk-edit-cache-ttl-override-target"
+              class="mt-1 block w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 dark:border-dark-500 dark:bg-dark-700 dark:text-white"
+            >
+              <option value="5m">5m</option>
+              <option value="1h">1h</option>
+            </select>
+            <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+              {{ t('admin.accounts.quotaControl.cacheTTLOverride.targetHint') }}
+            </p>
+          </div>
+        </div>
+      </div>
+
       <!-- Groups -->
       <div class="border-t border-gray-200 pt-4 dark:border-dark-600">
         <div class="mb-3 flex items-center justify-between">
@@ -1716,6 +1777,7 @@ const enableCodexCLIOnlyAppServer = ref(false)
 const enableOpenAICompactMode = ref(false)
 const enableOpenAICompactModelMapping = ref(false)
 const enableRpmLimit = ref(false)
+const enableCacheTTLOverride = ref(false)
 
 // State - field values
 const submitting = ref(false)
@@ -1765,6 +1827,8 @@ const codexFingerprintModeOptions = computed(() => [
 const openAICompactMode = ref<OpenAICompactMode>('auto')
 const openAICompactModelMappings = ref<ModelMapping[]>([])
 const rpmLimitEnabled = ref(false)
+const cacheTTLOverrideEnabled = ref(false)
+const cacheTTLOverrideTarget = ref<'5m' | '1h'>('5m')
 const bulkBaseRpm = ref<number | null>(null)
 const bulkRpmStrategy = ref<'tiered' | 'sticky_exempt'>('tiered')
 const bulkRpmStickyBuffer = ref<number | null>(null)
@@ -2192,6 +2256,14 @@ const buildUpdatePayload = (): Record<string, unknown> | null => {
     updates.extra = extra
   }
 
+  // 缓存 TTL 强制替换（写入 extra；JSONB merge 语义，关闭时显式写 false）
+  if (enableCacheTTLOverride.value && allAnthropicOAuthOrSetupToken.value) {
+    const extra = ensureExtra()
+    extra.cache_ttl_override_enabled = cacheTTLOverrideEnabled.value
+    extra.cache_ttl_override_target = cacheTTLOverrideTarget.value
+    updates.extra = extra
+  }
+
   // UMQ mode（独立于 RPM 保存）
   if (userMsgQueueMode.value !== null) {
     const umqExtra = ensureExtra()
@@ -2280,6 +2352,7 @@ const handleSubmit = async () => {
     enableOpenAICompactMode.value ||
     enableOpenAICompactModelMapping.value ||
     enableRpmLimit.value ||
+    (enableCacheTTLOverride.value && allAnthropicOAuthOrSetupToken.value) ||
     userMsgQueueMode.value !== null
 
   if (!hasAnyFieldEnabled) {
@@ -2433,6 +2506,7 @@ watch(
       enableOpenAICompactMode.value = false
       enableOpenAICompactModelMapping.value = false
       enableRpmLimit.value = false
+      enableCacheTTLOverride.value = false
 
       // Reset all values
       baseUrl.value = ''
@@ -2465,6 +2539,8 @@ watch(
       openAICompactMode.value = 'auto'
       openAICompactModelMappings.value = []
       rpmLimitEnabled.value = false
+      cacheTTLOverrideEnabled.value = false
+      cacheTTLOverrideTarget.value = '5m'
       bulkBaseRpm.value = null
       bulkRpmStrategy.value = 'tiered'
       bulkRpmStickyBuffer.value = null
