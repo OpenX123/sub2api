@@ -471,7 +471,14 @@ func (s *GatewayService) handleErrorResponse(ctx context.Context, resp *http.Res
 		return nil, fmt.Errorf("upstream error: %d (passthrough rule matched) message=%s", resp.StatusCode, summary)
 	}
 
-	// 根据状态码返回适当的自定义错误响应（不透传上游详细信息）
+	// Anthropic 上游由客户端请求导致的错误：状态码与 body 原样透传，不再包装。
+	if resp.StatusCode != http.StatusBadRequest && account.Platform == PlatformAnthropic &&
+		IsClientPassthroughUpstreamError(resp.StatusCode, body) {
+		c.Data(resp.StatusCode, "application/json", body)
+		return nil, fmt.Errorf("upstream error: %d message=%s", resp.StatusCode, upstreamMsg)
+	}
+
+	// 根据状态码返回适当的自定义错误响应（账号凭证/权限类错误不透传上游详细信息）
 	var errType, errMsg string
 	var statusCode int
 
@@ -640,6 +647,12 @@ func (s *GatewayService) handleRetryExhaustedError(ctx context.Context, resp *ht
 			return nil, fmt.Errorf("upstream error: %d (retries exhausted, passthrough rule matched)", resp.StatusCode)
 		}
 		return nil, fmt.Errorf("upstream error: %d (retries exhausted, passthrough rule matched) message=%s", resp.StatusCode, summary)
+	}
+
+	// Anthropic 上游由客户端请求导致的错误：重试耗尽后同样原样透传。
+	if account.Platform == PlatformAnthropic && IsClientPassthroughUpstreamError(resp.StatusCode, respBody) {
+		c.Data(resp.StatusCode, "application/json", respBody)
+		return nil, fmt.Errorf("upstream error: %d (retries exhausted) message=%s", resp.StatusCode, upstreamMsg)
 	}
 
 	// 返回统一的重试耗尽错误响应

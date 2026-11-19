@@ -31,6 +31,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/service"
 
 	"github.com/gin-gonic/gin"
+	"github.com/tidwall/gjson"
 	"go.uber.org/zap"
 )
 
@@ -1954,6 +1955,18 @@ func (h *GatewayHandler) handleFailoverExhausted(c *gin.Context, failoverErr *se
 	// 记录原始上游状态码，以便 ops 错误日志捕获真实的上游错误
 	upstreamMsg := service.ExtractUpstreamErrorMessage(responseBody)
 	service.SetOpsUpstreamError(c, statusCode, upstreamMsg, "")
+
+	// Anthropic 上游由客户端请求导致的错误：原样透传给客户端，不再包装。
+	// 流已开始时状态码已固化为 200，只能以 SSE error 帧回传原始 type 与 message。
+	if platform == service.PlatformAnthropic && service.IsClientPassthroughUpstreamError(statusCode, responseBody) {
+		if !streamStarted {
+			c.Data(statusCode, "application/json", responseBody)
+			return
+		}
+		errType := gjson.GetBytes(responseBody, "error.type").String()
+		h.handleStreamingAwareError(c, statusCode, errType, upstreamMsg, true)
+		return
+	}
 
 	// 使用默认的错误映射
 	status, errType, errMsg := h.mapUpstreamError(statusCode)
