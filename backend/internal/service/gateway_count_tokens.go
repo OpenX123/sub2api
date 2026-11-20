@@ -250,14 +250,7 @@ func (s *GatewayService) ForwardCountTokens(ctx context.Context, c *gin.Context,
 		}
 
 		// 返回简化的错误响应
-		errMsg := "Upstream request failed"
-		switch resp.StatusCode {
-		case 429:
-			errMsg = "Rate limit exceeded"
-		case 529:
-			errMsg = "Service overloaded"
-		}
-		s.countTokensError(c, resp.StatusCode, "upstream_error", errMsg)
+		s.writeCountTokensUpstreamError(c, account, resp.StatusCode, respBody)
 		if upstreamMsg == "" {
 			return fmt.Errorf("upstream error: %d", resp.StatusCode)
 		}
@@ -367,14 +360,7 @@ func (s *GatewayService) forwardCountTokensAnthropicAPIKeyPassthrough(ctx contex
 			Detail:             upstreamDetail,
 		})
 
-		errMsg := "Upstream request failed"
-		switch resp.StatusCode {
-		case 429:
-			errMsg = "Rate limit exceeded"
-		case 529:
-			errMsg = "Service overloaded"
-		}
-		s.countTokensError(c, resp.StatusCode, "upstream_error", errMsg)
+		s.writeCountTokensUpstreamError(c, account, resp.StatusCode, respBody)
 		if upstreamMsg == "" {
 			return fmt.Errorf("upstream error: %d", resp.StatusCode)
 		}
@@ -644,6 +630,24 @@ func sanitizeCountTokensRequestBody(body []byte) []byte {
 		}
 	}
 	return out
+}
+
+// writeCountTokensUpstreamError 写回 count_tokens 上游错误：客户端请求导致的错误（未知字段、
+// 未知 beta、参数非法、限流、过载等）原样透传 Anthropic 状态码与 body，与 /v1/messages 一致；
+// 账号级错误（401/403、实名、余额、组织停用等）仍包装成泛化文案，避免暴露上游账号状态。
+func (s *GatewayService) writeCountTokensUpstreamError(c *gin.Context, account *Account, statusCode int, respBody []byte) {
+	if account != nil && account.Platform == PlatformAnthropic && IsClientPassthroughUpstreamError(statusCode, respBody) {
+		c.Data(statusCode, "application/json", respBody)
+		return
+	}
+	errMsg := "Upstream request failed"
+	switch statusCode {
+	case 429:
+		errMsg = "Rate limit exceeded"
+	case 529:
+		errMsg = "Service overloaded"
+	}
+	s.countTokensError(c, statusCode, "upstream_error", errMsg)
 }
 
 // countTokensError 返回 count_tokens 错误响应
