@@ -3,6 +3,7 @@ package service
 import (
 	"strings"
 
+	"github.com/gin-gonic/gin"
 	"github.com/tidwall/gjson"
 )
 
@@ -47,4 +48,17 @@ func IsClientPassthroughUpstreamError(statusCode int, body []byte) bool {
 		}
 	}
 	return true
+}
+
+// writeClientPassthroughUpstreamError 把已通过 IsClientPassthroughUpstreamError 判定的上游错误写回客户端。
+// 响应未开始时状态码与 body 原样返回；并发/排队 keepalive 已经开启 SSE 时状态码已固化为 200，
+// 裸 JSON 会被 SSE 客户端丢弃，改为发送携带上游原始 type 与 message 的 SSE error 帧。
+func writeClientPassthroughUpstreamError(c *gin.Context, statusCode int, body []byte) {
+	if gatewaySSEStarted(c) {
+		errType := strings.TrimSpace(gjson.GetBytes(body, "error.type").String())
+		msg := sanitizeUpstreamErrorMessage(strings.TrimSpace(gjson.GetBytes(body, "error.message").String()))
+		writeGatewayErrorResponse(c, statusCode, errType, msg)
+		return
+	}
+	c.Data(statusCode, "application/json", body)
 }
