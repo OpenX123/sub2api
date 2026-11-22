@@ -244,9 +244,9 @@ func claudeCodeFingerprintCandidates(body map[string]any, version string) map[st
 		for _, i := range []int{4, 7, 20} {
 			if i < len(units) {
 				// 落在代理对中间的码元与 JS 一样编码为 U+FFFD。
-				chars.WriteRune(rune(units[i]))
+				_, _ = chars.WriteRune(rune(units[i]))
 			} else {
-				chars.WriteByte('0')
+				_ = chars.WriteByte('0')
 			}
 		}
 		sum := sha256.Sum256([]byte(fingerprintSalt + chars.String() + version))

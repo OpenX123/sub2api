@@ -107,7 +107,9 @@ func TestContentModerationVerdictCacheNeverStoresFailures(t *testing.T) {
 	// engine errors are written straight to the repository, not through the async queue
 	_, err := svc.Check(context.Background(), ContentModerationCheckInput{UserID: 5, Protocol: ContentModerationProtocolOpenAIChat, Body: moderationChatBody("hello")})
 	require.NoError(t, err)
-	logs := svc.repo.(*contentModerationTestRepo).snapshotLogs()
+	repo, isTestRepo := svc.repo.(*contentModerationTestRepo)
+	require.True(t, isTestRepo)
+	logs := repo.snapshotLogs()
 	require.Len(t, logs, 1)
 	require.NotEmpty(t, logs[0].Error)
 	require.Empty(t, cache.values)

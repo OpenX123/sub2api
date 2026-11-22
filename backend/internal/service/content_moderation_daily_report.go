@@ -136,9 +136,9 @@ func buildContentModerationDailyReport(day time.Time, stats ContentModerationDai
 	fmt.Fprintf(&b, "| 拦截 | %d（模型 %d，哈希预检 %d，关键词 %d） |\n", blocked, stats.Blocked, stats.HashBlocks, stats.KeywordBlocks)
 	fmt.Fprintf(&b, "| 观察名单命中（未拦截） | %d |\n", stats.ObserveFlagged)
 	fmt.Fprintf(&b, "| Jev 输入 token | %d（约 $%.2f） |\n\n", stats.InputTokens, cost)
-	b.WriteString("### 命中最多的用户\n\n")
+	fmt.Fprint(&b, "### 命中最多的用户\n\n")
 	if len(top) == 0 {
-		b.WriteString("无\n")
+		fmt.Fprint(&b, "无\n")
 	}
 	for i, u := range top {
 		fmt.Fprintf(&b, "%d. %s（ID %d）命中 %d 次，拦截 %d 次\n", i+1, u.UserEmail, u.UserID, u.Hits, u.Blocks)

@@ -23,7 +23,9 @@ func TestContentModerationObserveUserIsAuditedButNotBlocked(t *testing.T) {
 
 func TestContentModerationCyberAllowlistNoLongerExemptsModeration(t *testing.T) {
 	svc, _, _ := newOpenAIModerationTestService(t, 0.99, nil)
-	svc.settingRepo.(*contentModerationTestSettingRepo).values[SettingKeyCyberPolicyUserAllowlist] = "12"
+	settingRepo, ok := svc.settingRepo.(*contentModerationTestSettingRepo)
+	require.True(t, ok)
+	settingRepo.values[SettingKeyCyberPolicyUserAllowlist] = "12"
 
 	decision, err := svc.Check(context.Background(), ContentModerationCheckInput{UserID: 12, Protocol: ContentModerationProtocolOpenAIChat, Body: moderationChatBody("bad prompt")})
 
