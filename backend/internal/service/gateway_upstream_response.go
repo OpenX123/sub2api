@@ -476,6 +476,7 @@ func (s *GatewayService) handleErrorResponse(ctx context.Context, resp *http.Res
 
 	switch resp.StatusCode {
 	case 400:
+		markOpsClientRequestUpstreamError(c, resp.StatusCode, body)
 		if gatewaySSEStarted(c) {
 			errType := strings.TrimSpace(gjson.GetBytes(body, "error.type").String())
 			if errType == "" {

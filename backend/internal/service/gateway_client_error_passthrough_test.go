@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/gin-gonic/gin"
@@ -81,4 +82,33 @@ func TestGatewayHandleRetryExhaustedError_AnthropicClientErrorPassthroughRaw(t *
 	require.Error(t, err)
 	assert.Equal(t, http.StatusBadRequest, rec.Code)
 	assert.Equal(t, string(respBody), rec.Body.String())
+}
+
+func TestHandleErrorResponseAttributesClientRequestErrorsToClient(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	cases := []struct {
+		name   string
+		status int
+		body   string
+		scoped bool
+	}{
+		{"invalid thinking signature", 400, `{"type":"error","error":{"type":"invalid_request_error","message":"messages.2.content.0: Invalid ` + "`signature`" + ` in ` + "`thinking`" + ` block"}}`, true},
+		{"request too large", 413, `{"type":"error","error":{"type":"request_too_large","message":"Request exceeds the maximum size"}}`, true},
+		{"credit balance is account level", 400, `{"type":"error","error":{"type":"invalid_request_error","message":"Your credit balance is too low to access the Anthropic API."}}`, false},
+		{"upstream rate limit stays provider", 429, `{"type":"error","error":{"type":"rate_limit_error","message":"Number of request tokens has exceeded your per-minute rate limit"}}`, false},
+		{"overloaded stays provider", 529, `{"type":"error","error":{"type":"overloaded_error","message":"Overloaded"}}`, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			rec := httptest.NewRecorder()
+			c, _ := gin.CreateTestContext(rec)
+			c.Request = httptest.NewRequest(http.MethodPost, "/v1/messages", nil)
+			resp := &http.Response{StatusCode: tc.status, Header: http.Header{}, Body: io.NopCloser(strings.NewReader(tc.body))}
+			account := &Account{ID: 1, Platform: PlatformAnthropic, Type: AccountTypeAPIKey}
+			_, err := (&GatewayService{}).handleErrorResponse(context.Background(), resp, c, account)
+			require.Error(t, err)
+			require.Equal(t, tc.scoped, IsOpsRequestScopedError(c))
+			require.Equal(t, tc.status, rec.Code)
+		})
+	}
 }

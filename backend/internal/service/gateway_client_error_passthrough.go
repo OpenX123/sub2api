@@ -54,6 +54,7 @@ func IsClientPassthroughUpstreamError(statusCode int, body []byte) bool {
 // 响应未开始时状态码与 body 原样返回；并发/排队 keepalive 已经开启 SSE 时状态码已固化为 200，
 // 裸 JSON 会被 SSE 客户端丢弃，改为发送携带上游原始 type 与 message 的 SSE error 帧。
 func writeClientPassthroughUpstreamError(c *gin.Context, statusCode int, body []byte) {
+	markOpsClientRequestUpstreamError(c, statusCode, body)
 	if gatewaySSEStarted(c) {
 		errType := strings.TrimSpace(gjson.GetBytes(body, "error.type").String())
 		msg := sanitizeUpstreamErrorMessage(strings.TrimSpace(gjson.GetBytes(body, "error.message").String()))
@@ -61,4 +62,25 @@ func writeClientPassthroughUpstreamError(c *gin.Context, statusCode int, body []
 		return
 	}
 	c.Data(statusCode, "application/json", body)
+}
+
+// clientRequestUpstreamErrorTypes 是由请求内容本身决定的上游错误类型：换账号重试结果相同，
+// 与号池健康无关。
+var clientRequestUpstreamErrorTypes = map[string]struct{}{
+	"invalid_request_error": {},
+	"request_too_large":     {},
+	"not_found_error":       {},
+}
+
+// markOpsClientRequestUpstreamError 把由请求内容导致的上游错误（如 thinking 签名非法、参数错误）
+// 在 ops 中归因到客户端，而不是上游/号池；账号级错误（余额、组织停用、凭证范围）不受影响。
+func markOpsClientRequestUpstreamError(c *gin.Context, statusCode int, body []byte) {
+	if c == nil || !IsClientPassthroughUpstreamError(statusCode, body) {
+		return
+	}
+	errType := strings.TrimSpace(gjson.GetBytes(body, "error.type").String())
+	if _, ok := clientRequestUpstreamErrorTypes[errType]; !ok {
+		return
+	}
+	MarkOpsRequestScopedError(c, errType)
 }
