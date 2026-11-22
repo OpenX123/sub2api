@@ -321,6 +321,7 @@ export interface PushNotificationConfig {
   daily_report_enabled: boolean
   daily_report_hour: number
   ops_critical_enabled: boolean
+  account_alert_enabled: boolean
 }
 
 export interface UpdatePushNotificationConfig {
@@ -332,6 +333,7 @@ export interface UpdatePushNotificationConfig {
   daily_report_enabled?: boolean
   daily_report_hour?: number
   ops_critical_enabled?: boolean
+  account_alert_enabled?: boolean
 }
 
 export async function getPushConfig(): Promise<PushNotificationConfig> {

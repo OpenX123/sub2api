@@ -32,6 +32,7 @@ const config = () => ({
   daily_report_enabled: true,
   daily_report_hour: 9,
   ops_critical_enabled: true,
+  account_alert_enabled: true,
 })
 
 function mountDialog() {

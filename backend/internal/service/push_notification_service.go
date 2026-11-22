@@ -4,7 +4,6 @@ import (
 	"context"
 	"log/slog"
 	"net/url"
-	"strings"
 	"sync"
 	"time"
 )
@@ -41,6 +40,8 @@ type PushNotificationService struct {
 	stopOnce    sync.Once
 	wg          sync.WaitGroup
 	hits        moderationHitAggregator
+	accounts    PushAccountSource
+	accountSeen accountErrorSeen
 }
 
 func NewPushNotificationService(settingRepo SettingRepository, store PushNotificationStore, sender PushSender) *PushNotificationService {
@@ -95,6 +96,7 @@ func (s *PushNotificationService) run() {
 			cancel()
 		case <-ticker.C:
 			s.flushHitWindows(context.Background())
+			s.runAccountCheck()
 		}
 	}
 }
@@ -186,15 +188,17 @@ func (s *PushNotificationService) flushHitWindows(ctx context.Context) {
 	}
 }
 
+func (s *PushNotificationService) runAccountCheck() {
+	ctx, cancel := context.WithTimeout(context.Background(), pushSendTimeout)
+	defer cancel()
+	s.checkAccountErrors(ctx)
+}
+
 func (s *PushNotificationService) adminLogLink(ctx context.Context, requestID string) string {
-	if s == nil || s.settingRepo == nil || requestID == "" {
+	if requestID == "" {
 		return ""
 	}
-	base, err := s.settingRepo.GetValue(ctx, SettingKeyFrontendURL)
-	if err != nil || strings.TrimSpace(base) == "" {
-		return ""
-	}
-	return strings.TrimRight(strings.TrimSpace(base), "/") + "/admin/risk-control?search=" + url.QueryEscape(requestID)
+	return s.adminPageLink(ctx, "/admin/risk-control?search="+url.QueryEscape(requestID))
 }
 
 // NotifyOpsAlert forwards a P0 ops alert when the ops push switch is on.

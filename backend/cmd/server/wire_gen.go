@@ -280,7 +280,7 @@ func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
 	contentModerationStatsStore := repository.NewContentModerationStatsStore(redisClient)
 	contentModerationVerdictCache := repository.NewContentModerationVerdictCache(redisClient)
 	pushNotificationStore := repository.NewPushNotificationStore(redisClient)
-	pushNotificationService := service.ProvidePushNotificationService(settingRepository, pushNotificationStore)
+	pushNotificationService := service.ProvidePushNotificationService(settingRepository, pushNotificationStore, accountRepository)
 	contentModerationService := service.ProvideContentModerationService(settingRepository, contentModerationRepository, contentModerationHashCache, groupRepository, userRepository, proxyRepository, apiKeyAuthCacheInvalidator, emailService, contentModerationStatsStore, contentModerationVerdictCache, pushNotificationService)
 	contentModerationHandler := admin.NewContentModerationHandler(contentModerationService)
 	pushNotificationHandler := admin.NewPushNotificationHandler(pushNotificationService)

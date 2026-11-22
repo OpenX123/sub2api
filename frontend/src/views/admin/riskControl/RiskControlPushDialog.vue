@@ -44,6 +44,10 @@
         <p class="text-sm text-gray-900 dark:text-white">{{ t('admin.riskControl.push.opsCriticalEnabled') }}</p>
         <Toggle v-model="form.ops_critical_enabled" />
       </div>
+      <div class="flex items-center justify-between">
+        <p class="text-sm text-gray-900 dark:text-white">{{ t('admin.riskControl.push.accountAlertEnabled') }}</p>
+        <Toggle v-model="form.account_alert_enabled" />
+      </div>
     </div>
     <template #footer>
       <div class="flex justify-end gap-2">
@@ -85,6 +89,7 @@ const form = reactive({
   daily_report_enabled: true,
   daily_report_hour: 9,
   ops_critical_enabled: true,
+  account_alert_enabled: true,
 })
 
 function apply(cfg: PushNotificationConfig) {
@@ -98,6 +103,7 @@ function apply(cfg: PushNotificationConfig) {
     daily_report_enabled: cfg.daily_report_enabled,
     daily_report_hour: cfg.daily_report_hour,
     ops_critical_enabled: cfg.ops_critical_enabled,
+    account_alert_enabled: cfg.account_alert_enabled,
   })
 }
 
@@ -119,6 +125,7 @@ async function save() {
       daily_report_enabled: form.daily_report_enabled,
       daily_report_hour: Number(form.daily_report_hour),
       ops_critical_enabled: form.ops_critical_enabled,
+      account_alert_enabled: form.account_alert_enabled,
     }
     if (form.send_key !== '') {
       payload.send_key = form.send_key

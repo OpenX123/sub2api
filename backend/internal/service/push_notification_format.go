@@ -13,6 +13,8 @@ const (
 	PushCategoryOps    PushCategory = "ops"
 	PushCategoryReport PushCategory = "report"
 	PushCategoryNotice PushCategory = "notice"
+	// PushCategoryAccount 账号转为异常（status=error）的通知。
+	PushCategoryAccount PushCategory = "account"
 )
 
 type pushMessage struct {
@@ -59,7 +61,7 @@ func moderationHitLabel(ev ModerationHitEvent) string {
 func formatModerationHit(ev ModerationHitEvent, link string) pushMessage {
 	label := moderationHitLabel(ev)
 	var b strings.Builder
-	b.WriteString("| 项目 | 内容 |\n|---|---|\n")
+	fmt.Fprint(&b, "| 项目 | 内容 |\n|---|---|\n")
 	fmt.Fprintf(&b, "| 用户 | %s（ID %d） |\n", ev.UserEmail, ev.UserID)
 	fmt.Fprintf(&b, "| 分组 | %s |\n| 模型 | %s |\n", ev.GroupName, ev.Model)
 	fmt.Fprintf(&b, "| 类别 | %s（%.2f） |\n", ev.Category, ev.Score)

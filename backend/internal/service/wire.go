@@ -593,8 +593,11 @@ func ProvideContentModerationDailyReportService(
 }
 
 // ProvidePushNotificationService creates and starts the ServerChan push service.
-func ProvidePushNotificationService(settingRepo SettingRepository, store PushNotificationStore) *PushNotificationService {
+func ProvidePushNotificationService(settingRepo SettingRepository, store PushNotificationStore, accountRepo AccountRepository) *PushNotificationService {
 	svc := NewPushNotificationService(settingRepo, store, serverchan.NewClient(&http.Client{Timeout: 10 * time.Second}))
+	if accountRepo != nil {
+		svc.SetAccountSource(accountRepo)
+	}
 	svc.Start()
 	return svc
 }

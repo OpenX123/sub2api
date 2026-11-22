@@ -413,6 +413,7 @@ export default {
         dailyReportHour: 'Daily report hour (Beijing time)',
         dailyReportEnabled: 'Daily report',
         opsCriticalEnabled: 'Push ops P0 alerts',
+        accountAlertEnabled: 'Push account errors (accounts that stop scheduling)',
         sendTest: 'Send test',
         save: 'Save',
         saved: 'Push settings saved',

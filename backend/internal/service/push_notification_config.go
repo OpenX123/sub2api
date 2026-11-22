@@ -21,41 +21,45 @@ const (
 )
 
 type PushNotificationConfig struct {
-	Enabled            bool   `json:"enabled"`
-	SendKey            string `json:"send_key,omitempty"`
-	HitDailyCap        int    `json:"hit_daily_cap"`
-	HitWindowMinutes   int    `json:"hit_window_minutes"`
-	DailyReportEnabled bool   `json:"daily_report_enabled"`
-	DailyReportHour    int    `json:"daily_report_hour"`
-	OpsCriticalEnabled bool   `json:"ops_critical_enabled"`
+	Enabled             bool   `json:"enabled"`
+	SendKey             string `json:"send_key,omitempty"`
+	HitDailyCap         int    `json:"hit_daily_cap"`
+	HitWindowMinutes    int    `json:"hit_window_minutes"`
+	DailyReportEnabled  bool   `json:"daily_report_enabled"`
+	DailyReportHour     int    `json:"daily_report_hour"`
+	OpsCriticalEnabled  bool   `json:"ops_critical_enabled"`
+	AccountAlertEnabled bool   `json:"account_alert_enabled"`
 }
 
 type PushNotificationConfigView struct {
-	Enabled            bool   `json:"enabled"`
-	SendKeyConfigured  bool   `json:"send_key_configured"`
-	SendKeyMasked      string `json:"send_key_masked"`
-	HitDailyCap        int    `json:"hit_daily_cap"`
-	HitWindowMinutes   int    `json:"hit_window_minutes"`
-	DailyReportEnabled bool   `json:"daily_report_enabled"`
-	DailyReportHour    int    `json:"daily_report_hour"`
-	OpsCriticalEnabled bool   `json:"ops_critical_enabled"`
+	Enabled             bool   `json:"enabled"`
+	SendKeyConfigured   bool   `json:"send_key_configured"`
+	SendKeyMasked       string `json:"send_key_masked"`
+	HitDailyCap         int    `json:"hit_daily_cap"`
+	HitWindowMinutes    int    `json:"hit_window_minutes"`
+	DailyReportEnabled  bool   `json:"daily_report_enabled"`
+	DailyReportHour     int    `json:"daily_report_hour"`
+	OpsCriticalEnabled  bool   `json:"ops_critical_enabled"`
+	AccountAlertEnabled bool   `json:"account_alert_enabled"`
 }
 
 type UpdatePushNotificationConfigInput struct {
-	Enabled            *bool   `json:"enabled"`
-	SendKey            *string `json:"send_key"`
-	ClearSendKey       bool    `json:"clear_send_key"`
-	HitDailyCap        *int    `json:"hit_daily_cap"`
-	HitWindowMinutes   *int    `json:"hit_window_minutes"`
-	DailyReportEnabled *bool   `json:"daily_report_enabled"`
-	DailyReportHour    *int    `json:"daily_report_hour"`
-	OpsCriticalEnabled *bool   `json:"ops_critical_enabled"`
+	Enabled             *bool   `json:"enabled"`
+	SendKey             *string `json:"send_key"`
+	ClearSendKey        bool    `json:"clear_send_key"`
+	HitDailyCap         *int    `json:"hit_daily_cap"`
+	HitWindowMinutes    *int    `json:"hit_window_minutes"`
+	DailyReportEnabled  *bool   `json:"daily_report_enabled"`
+	DailyReportHour     *int    `json:"daily_report_hour"`
+	OpsCriticalEnabled  *bool   `json:"ops_critical_enabled"`
+	AccountAlertEnabled *bool   `json:"account_alert_enabled"`
 }
 
 func defaultPushNotificationConfig() *PushNotificationConfig {
 	return &PushNotificationConfig{
 		HitDailyCap: defaultPushHitDailyCap, HitWindowMinutes: defaultPushHitWindowMinutes,
 		DailyReportEnabled: true, DailyReportHour: defaultPushDailyReportHour, OpsCriticalEnabled: true,
+		AccountAlertEnabled: true,
 	}
 }
 
@@ -98,6 +102,7 @@ func (c *PushNotificationConfig) view() *PushNotificationConfigView {
 		Enabled: c.Enabled, SendKeyConfigured: c.SendKey != "",
 		HitDailyCap: c.HitDailyCap, HitWindowMinutes: c.HitWindowMinutes,
 		DailyReportEnabled: c.DailyReportEnabled, DailyReportHour: c.DailyReportHour, OpsCriticalEnabled: c.OpsCriticalEnabled,
+		AccountAlertEnabled: c.AccountAlertEnabled,
 	}
 	if c.SendKey != "" {
 		v.SendKeyMasked = maskSecretTail(c.SendKey)
@@ -155,6 +160,9 @@ func (s *PushNotificationService) UpdateConfig(ctx context.Context, in UpdatePus
 	}
 	if in.OpsCriticalEnabled != nil {
 		cfg.OpsCriticalEnabled = *in.OpsCriticalEnabled
+	}
+	if in.AccountAlertEnabled != nil {
+		cfg.AccountAlertEnabled = *in.AccountAlertEnabled
 	}
 	cfg.normalize()
 	if cfg.Enabled && cfg.SendKey == "" {
