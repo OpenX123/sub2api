@@ -189,7 +189,7 @@ func RegisterGatewayRoutes(
 	gateway.Use(requireGroupAnthropic)
 	{
 		// /v1/messages: auto-route based on group platform
-		gateway.POST("/messages", func(c *gin.Context) {
+		gateway.POST("/messages", validateMessagesBetaHeader, func(c *gin.Context) {
 			if isOpenAIResponsesCompatibleGatewayPlatform(c) {
 				h.OpenAIGateway.Messages(c)
 				return
@@ -501,7 +501,7 @@ func RegisterGatewayRoutes(
 	antigravityV1.Use(groupModelAllowlist)
 	antigravityV1.Use(requireGroupAnthropic)
 	{
-		antigravityV1.POST("/messages", h.Gateway.Messages)
+		antigravityV1.POST("/messages", validateMessagesBetaHeader, h.Gateway.Messages)
 		antigravityV1.POST("/messages/count_tokens", h.Gateway.CountTokens)
 		antigravityV1.GET("/models", h.Gateway.AntigravityModels)
 		antigravityV1.GET("/usage", h.Gateway.Usage)

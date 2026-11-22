@@ -466,3 +466,46 @@ func TestGatewayRoutesOpenAICountTokensPathIsRegistered(t *testing.T) {
 	router.ServeHTTP(w, req)
 	require.NotEqual(t, http.StatusNotFound, w.Code)
 }
+
+func TestGatewayRoutesMessagesValidatesAnthropicBeta(t *testing.T) {
+	fixMessagesBetaNow(t)
+	for _, route := range []struct{ platform, path string }{
+		{service.PlatformAnthropic, "/v1/messages"},
+		{service.PlatformOpenAI, "/v1/messages"},
+		{service.PlatformAntigravity, "/antigravity/v1/messages"},
+	} {
+		t.Run(route.platform+route.path, func(t *testing.T) {
+			router := newGatewayRoutesTestRouter(route.platform)
+			for _, tc := range []struct {
+				name    string
+				headers []string
+				invalid string
+			}{
+				{name: "missing"},
+				{name: "empty", headers: []string{""}},
+				{name: "known list", headers: []string{"claude-code-20250219, context-1m-2025-08-07", "mcp-client-2025-11-20"}},
+				{name: "new Claude Code beta", headers: []string{"per-turn-control-2026-07-01"}},
+				{name: "future-dated", headers: []string{"fake-beta-2099-01-01"}, invalid: "fake-beta-2099-01-01"},
+				{name: "undated in list", headers: []string{"context-1m-2025-08-07, fake-beta"}, invalid: "fake-beta"},
+				{name: "second header", headers: []string{"context-1m-2025-08-07", "fake-beta"}, invalid: "fake-beta"},
+			} {
+				t.Run(tc.name, func(t *testing.T) {
+					req := httptest.NewRequest(http.MethodPost, route.path, strings.NewReader(`{"model":"claude-sonnet-4-6","max_tokens":32,"messages":[{"role":"user","content":"hi"}]}`))
+					req.Header.Set("Content-Type", "application/json")
+					for _, value := range tc.headers {
+						req.Header.Add("Anthropic-Beta", value)
+					}
+					w := httptest.NewRecorder()
+					router.ServeHTTP(w, req)
+					if tc.invalid == "" {
+						// The stub handlers fail later for unrelated reasons; only the
+						// beta rejection itself must not happen.
+						require.NotContains(t, w.Body.String(), "anthropic-beta", w.Body.String())
+						return
+					}
+					requireAnthropicBetaRejection(t, w, tc.invalid)
+				})
+			}
+		})
+	}
+}
