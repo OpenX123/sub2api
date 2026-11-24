@@ -1371,8 +1371,12 @@ func (s *RateLimitService) handle429(ctx context.Context, account *Account, head
 
 	// 聚合头反映的是"绑定 claim"的重置点，不一定是账号的 5h/7d 窗口：
 	// 例如长上下文 "Usage credits are required" 的 429 会带月度额度 claim，
-	// 重置点落在次月 1 日 00:00 UTC。照单全收会把整个账号封到月初（实测 17 天），
-	// 因此与 per-window 头一致，仅接受 (now, now+8d] 内的值，否则走秒级兜底。
+	// 重置点落在次月 1 日 00:00 UTC。照单全收会把整个账号封到月初。
+	//
+	// 8 天的合理性上限挡不住全部场景：月中触发时距月初 17 天会被上限拒掉，
+	// 但月末 8 天内触发时距月初不足 8 天，仍会被当成账号窗口接受——账号被封
+	// 6 天 10 小时，而它自己的 7d 窗口利用率只有 78%~93%，根本没耗尽。
+	// 月初特征点在 parseAnthropicAggregateReset 里统一识别。
 	now := time.Now()
 	resetAt, ok := parseAnthropicAggregateReset(headers, now)
 	if !ok {
@@ -1733,8 +1737,40 @@ func selectAnthropicFableWindowLimit(headers http.Header, now time.Time) *anthro
 // parseAnthropicAggregateReset parses the aggregated
 // anthropic-ratelimit-unified-reset header with the same sanity checks as the
 // per-window variant (7d scale).
+//
+// 月度额度 claim 的重置点（次月 1 日 00:00 UTC）也会被拒：它不是账号的 5h/7d
+// 窗口，照单全收会把账号封到月初（实测 6~17 天），而账号自身窗口并未耗尽。
+// 8 天的上限挡不住月末 8 天内的场景——那段时间距月初不足 8 天，仍会落进
+// (now, now+8d]。因此额外按"月初零点"这一特征点识别。
 func parseAnthropicAggregateReset(headers http.Header, now time.Time) (time.Time, bool) {
-	return parseAnthropicResetTimestamp(headers.Get("anthropic-ratelimit-unified-reset"), now, 8*24*time.Hour)
+	resetAt, ok := parseAnthropicResetTimestamp(headers.Get("anthropic-ratelimit-unified-reset"), now, 8*24*time.Hour)
+	if !ok {
+		return time.Time{}, false
+	}
+	if isMonthStartReset(resetAt) {
+		return time.Time{}, false
+	}
+	return resetAt, true
+}
+
+// isMonthStartReset 判断重置点是否落在"次月 1 日 00:00 UTC"附近。
+//
+// Anthropic 的月度额度 claim（长上下文 "Usage credits are required" 的 429）
+// 重置点固定在月初零点，与账号的 5h/7d 窗口无关。
+//
+// 判定用"落在月初零点 ±1h 内"这一特征点，而不是"距今超过 N 天"：后者会连
+// 合法的 7d 聚合重置一起拒掉。误判方向是安全的——宁可只做秒级兜底，也不封到月初。
+func isMonthStartReset(resetAt time.Time) bool {
+	u := resetAt.UTC()
+	monthStart := time.Date(u.Year(), u.Month(), 1, 0, 0, 0, 0, time.UTC)
+	// 候选是当月 1 日零点与下月 1 日零点：月初零点本身，以及上月最后一天
+	// 23:00~23:59（等于下月 1 日零点前 1h 内）。
+	for _, boundary := range []time.Time{monthStart, monthStart.AddDate(0, 1, 0)} {
+		if d := u.Sub(boundary); d >= -time.Hour && d < time.Hour {
+			return true
+		}
+	}
+	return false
 }
 
 // persistAnthropicFableWindowLimit marks the Fable model family as rate limited

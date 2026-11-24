@@ -7,6 +7,18 @@ import (
 	"time"
 )
 
+// anthropicResetOffset 选一个距今 offset 的重置点，并确保它不落在月初零点
+// ±1h 内（parseAnthropicAggregateReset 会拒绝月初特征点）。
+//
+// 用相对时间构造测试夹具时，若不避开月初，测试结果会随运行日期漂移。
+func anthropicResetOffset(now time.Time, offset time.Duration) time.Time {
+	candidate := now.Add(offset).Truncate(time.Second)
+	for i := 0; i < 24 && isMonthStartReset(candidate); i++ {
+		candidate = candidate.Add(time.Hour)
+	}
+	return candidate
+}
+
 func TestCalculateAnthropic429ResetTime_Only5hExceeded(t *testing.T) {
 	headers := http.Header{}
 	headers.Set("anthropic-ratelimit-unified-5h-utilization", "1.02")
@@ -243,7 +255,7 @@ func TestSelectAnthropicFableWindowLimit_NoHeadersReturnsNil(t *testing.T) {
 func TestSelectAnthropicFableWindowLimit_FallsBackToAggregateReset(t *testing.T) {
 	// 7d_oi-reset 缺失时回退聚合 anthropic-ratelimit-unified-reset
 	now := time.Now()
-	reset := now.Add(80 * time.Hour).Truncate(time.Second)
+	reset := anthropicResetOffset(now, 80*time.Hour)
 
 	headers := http.Header{}
 	headers.Set("anthropic-ratelimit-unified-7d_oi-status", "rejected")
@@ -269,7 +281,7 @@ func TestSelectAnthropicFableWindowLimit_RejectedWithoutAnyResetReturnsNil(t *te
 
 func TestParseAnthropicAggregateReset(t *testing.T) {
 	now := time.Now()
-	future := now.Add(80 * time.Hour).Truncate(time.Second)
+	future := anthropicResetOffset(now, 80*time.Hour)
 
 	tests := []struct {
 		name   string

@@ -111,11 +111,10 @@ func fable429Headers(reset5h, resetOI time.Time) http.Header {
 	headers.Set("anthropic-ratelimit-unified-status", "rejected")
 	return headers
 }
-
 func TestHandleUpstreamError_Anthropic7dOiOnlyMarksModelRateLimit(t *testing.T) {
 	now := time.Now()
-	reset5h := now.Add(2 * time.Hour).Truncate(time.Second)
-	resetOI := now.Add(80 * time.Hour).Truncate(time.Second)
+	reset5h := anthropicResetOffset(now, 2*time.Hour)
+	resetOI := anthropicResetOffset(now, 80*time.Hour)
 	headers := fable429Headers(reset5h, resetOI)
 
 	repo := &anthropicWindowLimitRepo{}
@@ -196,7 +195,7 @@ func TestHandleUpstreamError_AnthropicFableCreditsRequiredFallsBackToRequestedMo
 }
 
 func TestHandleUpstreamError_AnthropicNonFableCreditsRequiredKeepsLegacyBehavior(t *testing.T) {
-	resetAt := time.Now().Add(2 * time.Hour).Truncate(time.Second)
+	resetAt := anthropicResetOffset(time.Now(), 2*time.Hour)
 	headers := http.Header{}
 	headers.Set("anthropic-ratelimit-unified-reset", strconv.FormatInt(resetAt.Unix(), 10))
 
@@ -214,8 +213,8 @@ func TestHandleUpstreamError_AnthropicNonFableCreditsRequiredKeepsLegacyBehavior
 
 func TestHandleUpstreamError_AnthropicSharedWindowStillWinsWithFableCreditsRequired(t *testing.T) {
 	now := time.Now()
-	reset5h := now.Add(2 * time.Hour).Truncate(time.Second)
-	reset7d := now.Add(80 * time.Hour).Truncate(time.Second)
+	reset5h := anthropicResetOffset(now, 2*time.Hour)
+	reset7d := anthropicResetOffset(now, 80*time.Hour)
 	headers := http.Header{}
 	headers.Set("anthropic-ratelimit-unified-5h-status", "rejected")
 	headers.Set("anthropic-ratelimit-unified-5h-utilization", "1.0")
@@ -239,8 +238,8 @@ func TestHandleUpstreamError_AnthropicSharedWindowStillWinsWithFableCreditsRequi
 func TestHandleUpstreamError_Anthropic5hWindowStillWinsOver7dOi(t *testing.T) {
 	// 5h 窗口 rejected 时必须仍按账号级限流处理（用 5h reset），同时记录 Fable 模型限流。
 	now := time.Now()
-	reset5h := now.Add(2 * time.Hour).Truncate(time.Second)
-	resetOI := now.Add(80 * time.Hour).Truncate(time.Second)
+	reset5h := anthropicResetOffset(now, 2*time.Hour)
+	resetOI := anthropicResetOffset(now, 80*time.Hour)
 	headers := fable429Headers(reset5h, resetOI)
 	headers.Set("anthropic-ratelimit-unified-5h-status", "rejected")
 	headers.Set("anthropic-ratelimit-unified-5h-utilization", "1.0")
@@ -260,8 +259,8 @@ func TestHandleUpstreamError_Anthropic5hWindowStillWinsOver7dOi(t *testing.T) {
 func TestHandleUpstreamError_AnthropicAccountWindowStillWinsOver7dOi(t *testing.T) {
 	// 7d 窗口真超限时必须仍按账号级限流处理，同时记录 Fable 模型限流。
 	now := time.Now()
-	reset5h := now.Add(2 * time.Hour).Truncate(time.Second)
-	resetOI := now.Add(80 * time.Hour).Truncate(time.Second)
+	reset5h := anthropicResetOffset(now, 2*time.Hour)
+	resetOI := anthropicResetOffset(now, 80*time.Hour)
 	headers := fable429Headers(reset5h, resetOI)
 	headers.Set("anthropic-ratelimit-unified-7d-status", "rejected")
 	headers.Set("anthropic-ratelimit-unified-7d-utilization", "1.02")
@@ -281,8 +280,8 @@ func TestHandleUpstreamError_AnthropicAccountWindowStillWinsOver7dOi(t *testing.
 func TestHandleUpstreamError_Anthropic429Without7dOiKeepsLegacyBehavior(t *testing.T) {
 	// 无 7d_oi 头、5h/7d 均未超限的 429：保持旧行为（按较早 reset 标记账号限流）。
 	now := time.Now()
-	reset5h := now.Add(2 * time.Hour).Truncate(time.Second)
-	reset7d := now.Add(80 * time.Hour).Truncate(time.Second)
+	reset5h := anthropicResetOffset(now, 2*time.Hour)
+	reset7d := anthropicResetOffset(now, 80*time.Hour)
 
 	headers := http.Header{}
 	headers.Set("anthropic-ratelimit-unified-5h-reset", strconv.FormatInt(reset5h.Unix(), 10))
@@ -326,7 +325,7 @@ func TestHandleUpstreamError_AnthropicAggregateResetBeyondWindowUsesFallback(t *
 
 // 聚合头落在 7d 量级内时仍按账号限流，但不应被写成"5 小时窗口"。
 func TestHandleUpstreamError_AnthropicAggregateReset7dScaleSkipsSessionWindow(t *testing.T) {
-	resetAt := time.Now().Add(3 * 24 * time.Hour).Truncate(time.Second)
+	resetAt := anthropicResetOffset(time.Now(), 3*24*time.Hour)
 	headers := http.Header{}
 	headers.Set("anthropic-ratelimit-unified-reset", strconv.FormatInt(resetAt.Unix(), 10))
 
@@ -343,7 +342,7 @@ func TestHandleUpstreamError_AnthropicAggregateReset7dScaleSkipsSessionWindow(t 
 
 // 聚合头落在 5h 量级内时保持原行为：账号限流并反推 session window。
 func TestHandleUpstreamError_AnthropicAggregateReset5hScaleUpdatesSessionWindow(t *testing.T) {
-	resetAt := time.Now().Add(2 * time.Hour).Truncate(time.Second)
+	resetAt := anthropicResetOffset(time.Now(), 2*time.Hour)
 	headers := http.Header{}
 	headers.Set("anthropic-ratelimit-unified-reset", strconv.FormatInt(resetAt.Unix(), 10))
 
@@ -356,4 +355,57 @@ func TestHandleUpstreamError_AnthropicAggregateReset5hScaleUpdatesSessionWindow(
 	require.Equal(t, 1, repo.rateLimitCalls)
 	require.Equal(t, resetAt, repo.lastRateLimitReset)
 	require.Equal(t, 1, repo.sessionWindowCalls)
+}
+
+// 月度额度 claim 的重置点落在次月 1 日 00:00 UTC。它落在 8 天上限之内（月末 8 天内
+// 触发时距月初不足 8 天），但根本不是账号的 5h/7d 窗口——账号自身 7d 利用率只有
+// 78%~93%。照单全收会把账号封到月初（实测 6 天 10 小时），必须改走秒级兜底。
+//
+// 用真实的生产日期构造：2026-12-01 00:00 UTC 距 2026-11-24 约 6.4 天。
+func TestHandleUpstreamError_AnthropicMonthStartAggregateResetUsesFallback(t *testing.T) {
+	// 生产现场：2026-11-24 收到长上下文 429，聚合头指向 2026-12-01 00:00 UTC。
+	monthStart := time.Date(2026, time.December, 1, 0, 0, 0, 0, time.UTC)
+	now := monthStart.Add(-6*24*time.Hour - 10*time.Hour) // 距月初 6d10h
+
+	// 聚合头解析层必须拒绝这个重置点（它在 8 天上限内，但不是账号窗口）。
+	headers := http.Header{}
+	headers.Set("anthropic-ratelimit-unified-reset", strconv.FormatInt(monthStart.Unix(), 10))
+	_, ok := parseAnthropicAggregateReset(headers, now)
+	require.False(t, ok, "month-start reset must be rejected by the aggregate parser")
+
+	// 端到端：账号不得被封到月初，而应落到秒级兜底冷却。
+	repo := &anthropicWindowLimitRepo{}
+	svc := NewRateLimitService(repo, nil, nil, nil, nil)
+	account := &Account{ID: 153, Type: AccountTypeOAuth, Platform: PlatformAnthropic}
+	body := []byte(`{"type":"error","error":{"type":"rate_limit_error","message":"Usage credits are required for long context requests."}}`)
+
+	before := time.Now()
+	svc.HandleUpstreamError(context.Background(), account, http.StatusTooManyRequests, headers, body, "claude-sonnet-4-6")
+
+	require.Equal(t, 1, repo.rateLimitCalls)
+	require.True(t, repo.lastRateLimitReset.Before(before.Add(time.Hour)),
+		"month-start aggregate reset must fall back to a short cooldown, got %v", repo.lastRateLimitReset)
+	require.Zero(t, repo.sessionWindowCalls, "month-start aggregate reset must not rewrite the 5h session window")
+}
+
+func TestIsMonthStartReset(t *testing.T) {
+	tests := []struct {
+		name string
+		in   time.Time
+		want bool
+	}{
+		{"exact month start", time.Date(2026, time.December, 1, 0, 0, 0, 0, time.UTC), true},
+		{"month start plus 30m", time.Date(2026, time.December, 1, 0, 30, 0, 0, time.UTC), true},
+		{"month start minus 30m", time.Date(2026, time.November, 30, 23, 30, 0, 0, time.UTC), true},
+		{"month start plus 2h", time.Date(2026, time.December, 1, 2, 0, 0, 0, time.UTC), false},
+		{"mid month", time.Date(2026, time.December, 15, 0, 0, 0, 0, time.UTC), false},
+		{"seven day window reset", time.Date(2026, time.December, 1, 3, 0, 0, 0, time.UTC), false},
+		{"non utc input still matches", time.Date(2026, time.December, 1, 8, 0, 0, 0, time.FixedZone("CST", 8*3600)), true},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			require.Equal(t, tc.want, isMonthStartReset(tc.in))
+		})
+	}
 }
