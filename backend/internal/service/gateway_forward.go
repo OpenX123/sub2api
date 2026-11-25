@@ -249,13 +249,8 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 		// Code..." system prompt 但缺少 billing attribution block，导致 Anthropic
 		// 检测到"有 CC prompt 但无 billing block"的不一致而判为 third-party。
 		// Parrot 的 transform_request 从不检查客户端 system 内容，直接覆盖。
-		systemRaw, _ := parsed.SystemValue()
-		systemPromptInjectionEnabled, systemPrompt, systemPromptBlocks := s.claudeOAuthSystemPromptInjectionSettings(ctx)
-		if systemPromptInjectionEnabled {
-			systemPromptBlocks = claudeOAuthSystemPromptBlocksForAccount(account, systemPromptBlocks)
-			if err := replaceBody(rewriteSystemForNonClaudeCodeWithPromptBlocks(body, systemRaw, systemPrompt, systemPromptBlocks)); err != nil {
-				return nil, err
-			}
+		if err := replaceBody(s.rewriteClaudeOAuthSystemIfEnabled(ctx, account, parsed, body)); err != nil {
+			return nil, err
 		}
 
 		normalizeOpts := claudeOAuthNormalizeOptions{}

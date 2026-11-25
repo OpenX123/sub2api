@@ -904,6 +904,10 @@ func extractSystemTextAndCacheControl(system any) (string, any) {
 			if !ok || strings.TrimSpace(text) == "" {
 				continue
 			}
+			// billing 块由代理重新生成，客户端自带的不能挪进 messages（会把指纹暴露在正文里）。
+			if strings.HasPrefix(text, claudeCodeBillingHeaderPrefix) && strings.Contains(text, claudeCodeEntrypointMarker) {
+				continue
+			}
 			parts = append(parts, text)
 			// system blocks are collapsed into one messages text block below.
 			// Preserve the last original breakpoint as the closest equivalent
@@ -916,6 +920,24 @@ func extractSystemTextAndCacheControl(system any) (string, any) {
 	default:
 		return "", nil
 	}
+}
+
+// stripClaudeCodeIdentitySentence 去掉开头的 Claude Code 身份句（到第一个句号或换行为止），
+// 返回剩余内容；不以身份句开头时原样返回。
+func stripClaudeCodeIdentitySentence(text string) string {
+	text = strings.TrimSpace(text)
+	for _, prefix := range claudeCodePromptPrefixes {
+		if !strings.HasPrefix(text, prefix) {
+			continue
+		}
+		rest := text[len(prefix):]
+		end := strings.IndexAny(rest, ".\n")
+		if end < 0 {
+			return ""
+		}
+		return strings.TrimSpace(rest[end+1:])
+	}
+	return text
 }
 
 func rewriteSystemForNonClaudeCodeWithPromptBlocks(body []byte, system any, expansionPrompt string, blocksConfig string) []byte {
@@ -954,8 +976,9 @@ func rewriteSystemForNonClaudeCodeWithPromptBlocks(body []byte, system any, expa
 
 	// 3. 将原始 system prompt 作为 user/assistant 消息对注入到 messages 开头
 	//    模型仍通过 messages 接收完整指令，保留客户端功能
-	ccPromptTrimmed := strings.TrimSpace(claudeCodeSystemPrompt)
-	if originalSystemText != "" && originalSystemText != ccPromptTrimmed && !hasClaudeCodePrefix(originalSystemText) {
+	//    以 CC 身份句开头时只去掉身份句（system 里已有），其后的客户端指令照常保留。
+	originalSystemText = stripClaudeCodeIdentitySentence(originalSystemText)
+	if originalSystemText != "" {
 		instructionBlock := map[string]any{
 			"type": "text",
 			"text": "[System Instructions]\n" + originalSystemText,
@@ -1389,6 +1412,18 @@ func (s *GatewayService) normalizeClientDatelineIfEnabled(ctx context.Context, a
 		return nil, false
 	}
 	return next, true
+}
+
+// rewriteClaudeOAuthSystemIfEnabled 是 /v1/messages 与 count_tokens 共用的 system 改写，
+// 两边必须注入完全相同的内容，count_tokens 才能等于 messages 的输入用量。
+func (s *GatewayService) rewriteClaudeOAuthSystemIfEnabled(ctx context.Context, account *Account, parsed *ParsedRequest, body []byte) []byte {
+	enabled, systemPrompt, systemPromptBlocks := s.claudeOAuthSystemPromptInjectionSettings(ctx)
+	if !enabled {
+		return body
+	}
+	systemRaw, _ := parsed.SystemValue()
+	systemPromptBlocks = claudeOAuthSystemPromptBlocksForAccount(account, systemPromptBlocks)
+	return rewriteSystemForNonClaudeCodeWithPromptBlocks(body, systemRaw, systemPrompt, systemPromptBlocks)
 }
 
 func (s *GatewayService) claudeOAuthSystemPromptInjectionSettings(ctx context.Context) (bool, string, string) {

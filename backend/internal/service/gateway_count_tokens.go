@@ -81,10 +81,17 @@ func (s *GatewayService) ForwardCountTokens(ctx context.Context, c *gin.Context,
 		return err
 	}
 
+	// 判定与 system 改写都必须和 /v1/messages 一致，否则 count_tokens 与 messages usage 对不上。
 	isClaudeCodeCT := IsClaudeCodeClient(ctx) || isClaudeCodeClient(c.GetHeader("User-Agent"), parsed.MetadataUserID)
+	if !isClaudeCodeCT && parsed.MetadataUserID != "" {
+		isClaudeCodeCT = systemHasBillingAttributionBlock(body)
+	}
 	shouldMimicClaudeCode := account.IsOAuth() && !isClaudeCodeCT
 
 	if shouldMimicClaudeCode {
+		if err := replaceBody(s.rewriteClaudeOAuthSystemIfEnabled(ctx, account, parsed, body)); err != nil {
+			return err
+		}
 		var normalizedBody []byte
 		normalizedBody, reqModel = normalizeClaudeOAuthRequestBody(body, reqModel, claudeOAuthNormalizeOptions{})
 		if err := replaceBody(normalizedBody); err != nil {
