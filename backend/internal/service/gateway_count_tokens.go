@@ -89,7 +89,7 @@ func (s *GatewayService) ForwardCountTokens(ctx context.Context, c *gin.Context,
 	shouldMimicClaudeCode := account.IsOAuth() && !isClaudeCodeCT
 
 	if shouldMimicClaudeCode {
-		if err := replaceBody(s.rewriteClaudeOAuthSystemIfEnabled(ctx, account, parsed, body)); err != nil {
+		if err := replaceBody(stripBillingAttributionBlocks(s.rewriteClaudeOAuthSystemIfEnabled(ctx, account, parsed, body))); err != nil {
 			return err
 		}
 		var normalizedBody []byte
@@ -666,4 +666,37 @@ func (s *GatewayService) countTokensError(c *gin.Context, status int, errType, m
 			"message": message,
 		},
 	})
+}
+
+// stripBillingAttributionBlocks 去掉 system 里的 billing 块：messages 的 usage 不计这一块，
+// count_tokens 却会计入（实测恒差 39 token），留着两边就永远对不上。
+func stripBillingAttributionBlocks(body []byte) []byte {
+	system := gjson.GetBytes(body, "system")
+	if !system.IsArray() {
+		return body
+	}
+	var kept [][]byte
+	removed := false
+	system.ForEach(func(_, item gjson.Result) bool {
+		text := item.Get("text").String()
+		if strings.HasPrefix(text, claudeCodeBillingHeaderPrefix) && strings.Contains(text, claudeCodeEntrypointMarker) {
+			removed = true
+			return true
+		}
+		kept = append(kept, []byte(item.Raw))
+		return true
+	})
+	if !removed {
+		return body
+	}
+	if len(kept) == 0 {
+		if out, ok := deleteJSONPathBytes(body, "system"); ok {
+			return out
+		}
+		return body
+	}
+	if out, ok := setJSONRawBytes(body, "system", buildJSONArrayRaw(kept)); ok {
+		return out
+	}
+	return body
 }

@@ -87,7 +87,10 @@ func TestForwardCountTokensMatchesMessagesBodyOnMimicPath(t *testing.T) {
 			return s.ForwardCountTokens(context.Background(), c, account, p)
 		})
 
-	require.Equal(t, gjson.GetBytes(messagesBody, "system").Raw, gjson.GetBytes(countBody, "system").Raw)
+	// billing 块不计入 messages usage，count_tokens 侧要去掉它，其余 system 必须一致。
+	require.Contains(t, gjson.GetBytes(messagesBody, "system").Raw, claudeCodeBillingHeaderPrefix)
+	require.Equal(t, gjson.GetBytes(stripBillingAttributionBlocks(messagesBody), "system").Raw, gjson.GetBytes(countBody, "system").Raw)
+	require.NotContains(t, gjson.GetBytes(countBody, "system").Raw, claudeCodeBillingHeaderPrefix)
 	require.Equal(t, gjson.GetBytes(messagesBody, "messages").Raw, gjson.GetBytes(countBody, "messages").Raw)
 	require.Contains(t, gjson.GetBytes(countBody, "messages").Raw, "BLUE-42")
 }
