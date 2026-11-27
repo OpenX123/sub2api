@@ -26,10 +26,14 @@ func ValidWebhook(url string) bool { return hook.MatchString(url) }
 type Client struct{ HTTP *http.Client }
 
 func (c Client) Send(ctx context.Context, url, title, body string) error {
+	payload := map[string]any{"msg_type": "post", "content": map[string]any{"post": map[string]any{"zh_cn": buildPost(title, body)}}}
+	return c.sendPayload(ctx, url, payload)
+}
+
+func (c Client) sendPayload(ctx context.Context, url string, payload map[string]any) error {
 	if !ValidWebhook(url) {
 		return errors.New("invalid Feishu webhook")
 	}
-	payload := map[string]any{"msg_type": "post", "content": map[string]any{"post": map[string]any{"zh_cn": buildPost(title, body)}}}
 	if secret := os.Getenv("FEISHU_BOT_SIGNING_SECRET"); secret != "" {
 		ts := strconv.FormatInt(time.Now().Unix(), 10)
 		mac := hmac.New(sha256.New, []byte(ts+"\n"+secret))

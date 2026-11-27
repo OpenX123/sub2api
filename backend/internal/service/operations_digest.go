@@ -4,7 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/feishu"
+	"os"
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
@@ -27,7 +28,7 @@ func (s *ContentModerationDailyReportService) sendOperationsDigest(ctx context.C
 		return err
 	}
 	day := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
-	lines, err := s.reports.OperationsDigest(ctx, slot, now, day)
+	card, err := s.reports.OperationsDigest(ctx, slot, now, day)
 	if err != nil {
 		return err
 	}
@@ -64,9 +65,21 @@ func (s *ContentModerationDailyReportService) sendOperationsDigest(ctx context.C
 	for _, n := range load {
 		current += n
 	}
-	body := fmt.Sprintf("Claude 号池 · 可调度 %d / 共 %d · 限流 %d · 冷却 %d · 异常 %d\n当前并发 %d / 可调度容量 %d\n", ready, len(accounts), limited, cooling, broken, current, capacity)
-	title := fmt.Sprintf("运营汇总 · %s–%s（北京时间）", slot.Add(-3*time.Hour).Format("01-02 15:04"), slot.Format("15:04"))
-	if err := s.push.sender.Send(ctx, cfg.SendKey, title, body+strings.Join(lines, "\n")); err != nil {
+	card.Title = os.Getenv("OPERATIONS_DIGEST_TITLE")
+	if card.Title == "" {
+		card.Title = "Sub2API · 运营速报"
+	}
+	card.Window = fmt.Sprintf("%s–%s · 北京时间", slot.Add(-3*time.Hour).Format("01-02 15:04"), slot.Format("15:04"))
+	card.Pool = fmt.Sprintf("%d / %d", ready, len(accounts))
+	card.Concurrency = fmt.Sprintf("%d / %d", current, capacity)
+	card.PoolDetail = fmt.Sprintf("限流 %d · 冷却 %d · 异常 %d", limited, cooling, broken)
+	sender, ok := s.push.sender.(interface {
+		SendDigestCard(context.Context, string, feishu.DigestCard) error
+	})
+	if !ok {
+		return errors.New("digest card sender unavailable")
+	}
+	if err := sender.SendDigestCard(ctx, cfg.SendKey, *card); err != nil {
 		return err
 	}
 	return s.push.settingRepo.Set(ctx, digestCheckpoint, token)

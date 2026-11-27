@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/feishu"
 	"log/slog"
 	"strings"
 	"sync"
@@ -24,7 +25,7 @@ type ContentModerationUserHitCount struct {
 }
 
 type ContentModerationReportRepository interface {
-	OperationsDigest(ctx context.Context, slot, now, day time.Time) ([]string, error)
+	OperationsDigest(ctx context.Context, slot, now, day time.Time) (*feishu.DigestCard, error)
 	TopFlaggedUsers(ctx context.Context, from, to time.Time, limit int) ([]ContentModerationUserHitCount, error)
 }
 

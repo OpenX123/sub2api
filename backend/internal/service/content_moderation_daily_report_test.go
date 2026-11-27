@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/feishu"
 	"testing"
 	"time"
 
@@ -13,7 +14,7 @@ type fakeModerationReportRepo struct {
 	from, to time.Time
 }
 
-func (f *fakeModerationReportRepo) OperationsDigest(context.Context, time.Time, time.Time, time.Time) ([]string, error) {
+func (f *fakeModerationReportRepo) OperationsDigest(context.Context, time.Time, time.Time, time.Time) (*feishu.DigestCard, error) {
 	return nil, nil
 }
 

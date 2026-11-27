@@ -4,7 +4,9 @@ import (
 	"context"
 	"database/sql"
 	_ "embed"
+	"encoding/json"
 	"fmt"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/feishu"
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/service"
@@ -42,19 +44,14 @@ LIMIT $3`, from, to, limit)
 //go:embed operations_digest.sql
 var operationsDigestSQL string
 
-func (r *contentModerationRepository) OperationsDigest(ctx context.Context, slot, now, day time.Time) ([]string, error) {
-	rows, err := r.db.QueryContext(ctx, operationsDigestSQL, slot, now, day)
-	if err != nil {
+func (r *contentModerationRepository) OperationsDigest(ctx context.Context, slot, now, day time.Time) (*feishu.DigestCard, error) {
+	var raw []byte
+	if err := r.db.QueryRowContext(ctx, operationsDigestSQL, slot, now, day).Scan(&raw); err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-	var lines []string
-	for rows.Next() {
-		var line string
-		if err := rows.Scan(&line); err != nil {
-			return nil, err
-		}
-		lines = append(lines, line)
+	var card feishu.DigestCard
+	if err := json.Unmarshal(raw, &card); err != nil {
+		return nil, err
 	}
-	return lines, rows.Err()
+	return &card, nil
 }

@@ -32,15 +32,9 @@ WITH claude AS (
  FILTER (WHERE pos<=3) names FROM error_rank e LEFT JOIN users u ON u.id=e.user_id
  GROUP BY error_type,status_code,error_owner
 ), lines AS (
- SELECT 1 sec,0::bigint pos,format('最近 1 分钟完成请求 %s RPM · 近 15 分钟流式首字 P95 %s · 总耗时 P95 %s',
- count(*) filter(where created_at >= $2::timestamptz - interval '1 minute'),
- coalesce(round((percentile_cont(.95) within group(order by first_token_ms) filter(where stream))::numeric)::text||' ms','无样本'),
- coalesce(round((percentile_cont(.95) within group(order by duration_ms))::numeric)::text||' ms','无样本')) line FROM claude
- UNION ALL SELECT 2,0,format('Jev 风控 · %s 位用户（按严重程度，最多列 10 位）',count(*)) FROM risk_users
- UNION ALL SELECT 2,pos,format('%s · %s（ID %s） · 命中 %s / 拦截 %s · %s · 最高 %s',
+ SELECT 2 sec,pos,format('%s · %s（ID %s） · 命中 %s / 拦截 %s · %s · 最高 %s',
  CASE WHEN banned THEN '自动封禁' WHEN blocks>=2 THEN '多次拦截' WHEN blocks=1 THEN '单次拦截' ELSE '观察命中' END,
- email,user_id,hits,blocks,category,round(score::numeric,2)) FROM risk_rank WHERE pos<=10
- UNION ALL SELECT 3,0,format('今日消费 · 合计 $%s（前 10 名）',round(coalesce(sum(cost),0),4)) FROM spend
+ email,user_id,hits,blocks,category,round(score::numeric,2)) line FROM risk_rank WHERE pos<=10
  UNION ALL SELECT 3,pos,format('%s. %s（ID %s） · $%s · %s 次请求',pos,coalesce(u.email,'未知用户'),r.user_id,round(cost::numeric,4),requests)
  FROM spend_rank r LEFT JOIN users u ON u.id=r.user_id WHERE pos<=10
  UNION ALL SELECT 4,0,format('主要错误 · 共 %s 条记录（前 5 类）',coalesce(sum(hits),0)) FROM error_groups
@@ -48,4 +42,15 @@ WITH claude AS (
  format('%s / HTTP %s · %s 次 · %s 位已识别用户 · %s：%s',error_type,status_code,hits,users,
  CASE WHEN error_owner='client' THEN '触发用户' ELSE '受影响用户' END,names) FROM error_groups
 )
-SELECT line FROM lines WHERE sec<>4 OR pos<=5 ORDER BY sec,pos
+SELECT jsonb_build_object(
+ 'RPM',(SELECT count(*)::text FROM claude WHERE created_at >= $2::timestamptz-interval '1 minute'),
+ 'Latency',(SELECT coalesce(round((percentile_cont(.95) within group(order by first_token_ms) filter(where stream))::numeric/1000,1)::text||' 秒','无样本') FROM claude),
+ 'Duration',(SELECT coalesce(round((percentile_cont(.95) within group(order by duration_ms))::numeric/1000,1)::text||' 秒','无样本') FROM claude),
+ 'Highlight',coalesce((SELECT CASE WHEN banned THEN format('🟠 用户 #%s 已自动封禁',user_id) WHEN blocks>=2 THEN format('🟠 用户 #%s 被拦截 %s 次',user_id,blocks) ELSE '' END FROM risk_rank WHERE pos=1),''),
+ 'Risk',(SELECT format('🛡️ Jev　%s 人命中 · %s 人重复拦截',count(*),count(*) filter(where blocks>=2)) FROM risk_users),
+ 'Spend',(SELECT format('今日消费　$%s',round(coalesce(sum(cost),0),2)) FROM spend)||coalesce((SELECT format(' · #%s 最高 $%s',user_id,round(cost::numeric,2)) FROM spend_rank WHERE pos=1),''),
+ 'Errors',coalesce((SELECT format('主要错误　%s · %s 次 · %s 人',case when error_owner='client' then '请求' when error_owner='provider' then '上游' else '服务' end || ' ' || status_code,hits,users) FROM error_groups ORDER BY hits DESC,error_type,status_code,error_owner LIMIT 1),'主要错误　无记录'),
+ 'RiskRows',(SELECT jsonb_agg(line ORDER BY pos) FROM lines WHERE sec=2 AND pos>0),
+ 'SpendRows',(SELECT jsonb_agg(line ORDER BY pos) FROM lines WHERE sec=3 AND pos>0),
+ 'ErrorRows',(SELECT jsonb_agg(line ORDER BY pos) FROM lines WHERE sec=4 AND pos BETWEEN 1 AND 5)
+)
