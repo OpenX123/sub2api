@@ -586,9 +586,11 @@ func ProvideContentModerationDailyReportService(
 	stats ContentModerationStatsStore,
 	reports ContentModerationReportRepository,
 	pushStore PushNotificationStore,
+	admin AdminService, usage *AccountUsageService,
 	ops *OpsService,
 ) *ContentModerationDailyReportService {
 	svc := NewContentModerationDailyReportService(push, stats, reports, pushStore)
+	svc.admin, svc.usage = admin, usage
 	svc.ops = ops
 	svc.Start()
 	return svc

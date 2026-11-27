@@ -1,5 +1,9 @@
 export default {
     accounts: {
+      claudeTier: {
+        label: 'Claude 套餐', keep: '保留当前标注', auto: '按账号名称识别',
+        pro: 'Pro', max: 'Max', ultra: 'Ultra', edu: 'Edu', unknown: '未分类'
+      },
       title: '账号管理',
       description: '管理 AI 平台账号和 Cookie',
       createAccount: '添加账号',

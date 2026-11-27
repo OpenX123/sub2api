@@ -14,6 +14,39 @@ WITH claude AS (
  FROM risk GROUP BY user_id
 ), risk_rank AS (
  SELECT *,count(*) over() n,row_number() over(order by banned DESC,blocks DESC,hits DESC,user_id) pos FROM risk_users
+), blocked_categories AS (
+ SELECT highest_category,sum(blocks) blocks,count(user_id) users,max(blocks) peak
+ FROM risk WHERE blocks>0 GROUP BY highest_category
+ ORDER BY blocks DESC,highest_category LIMIT 3
+), hourly AS (
+ SELECT date_trunc('hour',created_at) bucket,user_id,count(*) requests,sum(actual_cost) cost,
+ sum(input_tokens::bigint+output_tokens+cache_creation_tokens+cache_read_tokens) tokens
+ FROM usage_logs WHERE created_at >= $1::timestamptz-interval '24 hours' AND created_at < $1
+ GROUP BY 1,2
+), analysis_windows AS (
+ SELECT n, jsonb_build_object(
+ 'requests',coalesce(sum(h.requests),0),'tokens',coalesce(sum(h.tokens),0),
+ 'cost_usd',round(coalesce(sum(h.cost),0),4),
+ 'errors',CASE WHEN n=0 THEN (SELECT count(*) FROM ops_error_logs WHERE created_at >= $1::timestamptz-interval '3 hours' AND created_at < $1)
+ ELSE (SELECT count(*) FROM ops_error_logs WHERE created_at >= $1::timestamptz-interval '6 hours' AND created_at < $1::timestamptz-interval '3 hours') END
+ ) metrics FROM generate_series(0,1) n LEFT JOIN hourly h
+ ON h.bucket >= $1::timestamptz - (n+1)*interval '3 hours'
+ AND h.bucket < $1::timestamptz - n*interval '3 hours' GROUP BY n
+), volumes AS (
+ SELECT user_id,sum(tokens) tokens,sum(cost) cost,sum(requests) requests,
+ sum(CASE WHEN bucket >= $1::timestamptz-interval '3 hours' THEN tokens
+          WHEN bucket >= $1::timestamptz-interval '6 hours' THEN -tokens ELSE 0 END) growth
+ FROM hourly GROUP BY user_id
+), leaders AS (
+ SELECT *,row_number() over(order by tokens DESC,user_id) pos FROM volumes WHERE tokens>0
+), selected AS (
+ SELECT * FROM leaders WHERE pos<=3
+ UNION ALL
+ (SELECT * FROM leaders WHERE pos>3 AND growth>0 ORDER BY growth DESC,user_id LIMIT 2)
+), points AS (
+ SELECT h.bucket,s.user_id,coalesce(u.tokens,0) tokens
+ FROM generate_series($1::timestamptz-interval '24 hours',$1::timestamptz-interval '1 hour',interval '1 hour') h(bucket)
+ CROSS JOIN selected s LEFT JOIN hourly u ON u.user_id=s.user_id AND u.bucket=h.bucket
 ), spend AS (
  SELECT user_id,sum(actual_cost) cost,count(*) requests FROM usage_logs
  WHERE created_at >= $3::timestamptz AND created_at < $2 GROUP BY user_id
@@ -26,6 +59,9 @@ WITH claude AS (
 ), error_rank AS (
  SELECT e.*,row_number() over(partition by error_type,status_code,error_owner order by hits DESC,user_id) pos
  FROM errors e
+), active_users AS (
+ SELECT user_id FROM hourly WHERE bucket >= $1::timestamptz-interval '3 hours'
+ UNION SELECT user_id FROM errors WHERE user_id IS NOT NULL
 ), error_groups AS (
  SELECT error_type,status_code,error_owner,sum(hits) hits,count(user_id) users,
  string_agg(format('%s（%s 次）',coalesce(u.email,'ID '||user_id::text,'身份未知'),hits),'、' order by pos)
@@ -43,6 +79,8 @@ WITH claude AS (
  CASE WHEN error_owner='client' THEN '触发用户' ELSE '受影响用户' END,names) FROM error_groups
 )
 SELECT jsonb_build_object(
+ 'AnalysisCurrent',(SELECT metrics FROM analysis_windows WHERE n=0),
+ 'AnalysisPrevious',(SELECT metrics FROM analysis_windows WHERE n=1),
  'RPM',(SELECT count(*)::text FROM claude WHERE created_at >= $2::timestamptz-interval '1 minute'),
  'Latency',(SELECT coalesce(round((percentile_cont(.95) within group(order by first_token_ms) filter(where stream))::numeric/1000,1)::text||' 秒','无样本') FROM claude),
  'Duration',(SELECT coalesce(round((percentile_cont(.95) within group(order by duration_ms))::numeric/1000,1)::text||' 秒','无样本') FROM claude),
@@ -53,4 +91,18 @@ SELECT jsonb_build_object(
  'RiskRows',(SELECT jsonb_agg(line ORDER BY pos) FROM lines WHERE sec=2 AND pos>0),
  'SpendRows',(SELECT jsonb_agg(line ORDER BY pos) FROM lines WHERE sec=3 AND pos>0),
  'ErrorRows',(SELECT jsonb_agg(line ORDER BY pos) FROM lines WHERE sec=4 AND pos BETWEEN 1 AND 5)
+ ,'Trend',(SELECT jsonb_agg(jsonb_build_object('hour',to_char(bucket AT TIME ZONE 'Asia/Shanghai','HH24:MI'),'user','#'||user_id,'millions',round(tokens::numeric/1000000,4)) ORDER BY bucket,user_id) FROM points)
+ ,'TrendRows',(SELECT jsonb_agg(format('#%s · %s 次请求 · %s M Token · $%s · 近 3h 增减 %s M',user_id,requests,round(tokens/1000000,2),round(cost,2),round(growth/1000000,2)) ORDER BY pos) FROM selected)
+ ,'TokenShare',(SELECT round(100*sum(tokens) FILTER (WHERE pos<=3)/nullif(sum(tokens),0),1)::text FROM leaders)
+ ,'SpendShare',(SELECT round(100*sum(cost) FILTER (WHERE pos<=3)/nullif(sum(cost),0),1)::text FROM spend_rank)
+ ,'ErrorImpact',(SELECT format('%s / %s 位活跃用户（%s）',count(DISTINCT user_id),(SELECT count(*) FROM active_users),
+ coalesce(round(100.0*count(DISTINCT user_id)/nullif((SELECT count(*) FROM active_users),0),1)::text||'%','无样本')) FROM errors)
+ ,'Examples',(SELECT jsonb_agg(format('%s · 拦截 %s 次 · %s 位已识别用户 · 单一身份最多 %s 次%s',
+ b.highest_category,b.blocks,b.users,b.peak,format(E'\n最近一例　%s · %s · 评分 %s',
+ to_char(e.created_at AT TIME ZONE 'Asia/Shanghai','HH24:MI'),coalesce(nullif(e.model,''),'模型未知'),round(e.highest_score,2)))
+ ORDER BY b.blocks DESC,b.highest_category) FROM blocked_categories b
+ JOIN LATERAL (SELECT created_at,model,highest_score FROM content_moderation_logs
+ WHERE created_at >= $1::timestamptz-interval '3 hours' AND created_at < $1
+ AND flagged AND action='block' AND engine_meta->>'engine'='typesafe' AND highest_category=b.highest_category
+ ORDER BY created_at DESC,id DESC LIMIT 1) e ON true)
 )

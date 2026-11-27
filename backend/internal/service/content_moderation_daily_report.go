@@ -31,6 +31,8 @@ type ContentModerationReportRepository interface {
 
 // ContentModerationDailyReportService pushes yesterday's audit summary once per Beijing day.
 type ContentModerationDailyReportService struct {
+	admin     AdminService
+	usage     *AccountUsageService
 	ops       *OpsService
 	push      *PushNotificationService
 	stats     ContentModerationStatsStore
@@ -52,6 +54,10 @@ func (s *ContentModerationDailyReportService) Start() {
 		return
 	}
 	s.startOnce.Do(func() {
+		if s.admin != nil && s.ops != nil {
+			s.wg.Add(1)
+			go s.monitorIncidents()
+		}
 		s.wg.Add(1)
 		go func() {
 			defer s.wg.Done()

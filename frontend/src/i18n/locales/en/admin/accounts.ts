@@ -1,5 +1,9 @@
 export default {
     accounts: {
+      claudeTier: {
+        label: 'Claude plan', keep: 'Keep current label', auto: 'Infer from account name',
+        pro: 'Pro', max: 'Max', ultra: 'Ultra', edu: 'Edu', unknown: 'Unclassified'
+      },
       title: 'Account Management',
       description: 'Manage AI platform accounts and credentials',
       createAccount: 'Create Account',

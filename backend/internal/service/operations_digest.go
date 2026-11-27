@@ -4,10 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/Wei-Shaw/sub2api/internal/pkg/feishu"
+	"log/slog"
 	"os"
 	"time"
 
+	"github.com/Wei-Shaw/sub2api/internal/pkg/feishu"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
 )
 
@@ -62,6 +63,7 @@ func (s *ContentModerationDailyReportService) sendOperationsDigest(ctx context.C
 	if err != nil {
 		return err
 	}
+	card.TierRows = tierCapacityRows(s.tierCapacity(ctx, accounts, load, false, now))
 	for _, n := range load {
 		current += n
 	}
@@ -79,8 +81,11 @@ func (s *ContentModerationDailyReportService) sendOperationsDigest(ctx context.C
 	if !ok {
 		return errors.New("digest card sender unavailable")
 	}
+	card.Suggestions = s.ops.digestAnalysis(ctx, card)
 	if err := sender.SendDigestCard(ctx, cfg.SendKey, *card); err != nil {
 		return err
 	}
+	slog.Info("operations_digest.sent", "slot", token, "trend_points", len(card.Trend),
+		"risk_examples", len(card.Examples), "tier_rows", len(card.TierRows), "suggestions", len(card.Suggestions))
 	return s.push.settingRepo.Set(ctx, digestCheckpoint, token)
 }
