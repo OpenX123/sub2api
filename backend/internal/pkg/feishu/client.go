@@ -51,11 +51,11 @@ func (c Client) sendPayload(ctx context.Context, url string, payload map[string]
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := c.HTTP.Do(req)
 	if err != nil {
-		return errors.New("Feishu transport error")
+		return errors.New("feishu transport error")
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != 200 {
-		return fmt.Errorf("Feishu HTTP %d", resp.StatusCode)
+		return fmt.Errorf("feishu HTTP %d", resp.StatusCode)
 	}
 	var result struct {
 		Code *int `json:"code"`
@@ -64,7 +64,7 @@ func (c Client) sendPayload(ctx context.Context, url string, payload map[string]
 		return errors.New("invalid Feishu response")
 	}
 	if *result.Code != 0 {
-		return fmt.Errorf("Feishu API code %d", *result.Code)
+		return fmt.Errorf("feishu API code %d", *result.Code)
 	}
 	return nil
 }

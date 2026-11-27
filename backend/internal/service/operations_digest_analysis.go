@@ -115,7 +115,7 @@ func (s *OpsService) digestModelAttempt(ctx context.Context, a *Account, req *ht
 		slog.Warn("operations_digest.analysis_failed", "reason", reason)
 		return nil, ctx.Err() == nil
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		slog.Warn("operations_digest.analysis_failed", "status", resp.StatusCode)
 		return nil, resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode >= 500 || resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden
@@ -189,7 +189,7 @@ func readDigestAnalysis(body io.Reader, anthropic bool) []string {
 		var b strings.Builder
 		for _, block := range parsed.Content {
 			if block.Type == "text" {
-				b.WriteString(block.Text)
+				_, _ = b.WriteString(block.Text)
 			}
 		}
 		return parseDigestSuggestions(b.String())

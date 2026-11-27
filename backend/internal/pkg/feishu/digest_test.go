@@ -2,29 +2,36 @@ package feishu
 
 import (
 	"encoding/json"
-	"github.com/stretchr/testify/require"
+	"reflect"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestDigestCardKeepsDetailsCollapsed(t *testing.T) {
 	d := DigestCard{Title: "运营速报", Highlight: "重复拦截", Risk: "Jev", RiskRows: []string{"audit@example.org"}, Spend: "消费", Errors: "错误"}
 	card := d.payload()
 	require.Equal(t, "2.0", card["schema"])
-	require.Equal(t, "orange", card["header"].(component)["template"])
-	items := card["body"].(component)["elements"].([]component)
+	header, ok := card["header"].(component)
+	require.True(t, ok)
+	require.Equal(t, "orange", header["template"])
+	body, ok := card["body"].(component)
+	require.True(t, ok)
+	items, ok := body["elements"].([]component)
+	require.True(t, ok)
 	var riskPanel component
 	for _, item := range items {
 		if item["tag"] == "collapsible_panel" {
 			require.Equal(t, false, item["expanded"])
-			header := item["header"].(component)
-			if header["title"].(component)["content"] == "Jev" {
+			header, ok := item["header"].(component)
+			require.True(t, ok)
+			if reflect.DeepEqual(header["title"], cardText("Jev")) {
 				riskPanel = item
 			}
 		}
 	}
 	require.NotNil(t, riskPanel)
-	require.NotContains(t, riskPanel["header"].(component)["title"].(component)["content"], "@")
-	require.Contains(t, riskPanel["elements"].([]component)[0]["text"].(component)["content"], "audit@example.org")
+	require.Equal(t, []component{cardLine("audit@example.org")}, riskPanel["elements"])
 }
 
 func TestDigestTrendUsesNativeChartAndPlainText(t *testing.T) {
