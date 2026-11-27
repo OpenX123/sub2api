@@ -155,7 +155,7 @@ func (s *ContentModerationDailyReportService) checkIncidents(ctx context.Context
 	probeRound, stopProbes := context.WithTimeout(ctx, 30*time.Second)
 	defer stopProbes()
 	var probes errgroup.Group
-	probes.SetLimit(8)
+	probes.SetLimit(12)
 	for i, p := range proxies {
 		if p.AccountCount == 0 {
 			continue

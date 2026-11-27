@@ -71,7 +71,9 @@ func (s *ContentModerationDailyReportService) tierCapacity(ctx context.Context, 
 			FiveHourWindowCosts(context.Context, []int64, []time.Time) (map[int64]float64, error)
 		})
 		if ok {
-			costs, err := reader.FiveHourWindowCosts(ctx, ids, starts)
+			costCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
+			costs, err := reader.FiveHourWindowCosts(costCtx, ids, starts)
+			cancel()
 			if err != nil {
 				slog.Warn("operations_capacity.cost_failed", "error", err)
 			} else {
