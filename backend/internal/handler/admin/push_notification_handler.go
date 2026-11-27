@@ -15,14 +15,15 @@ func NewPushNotificationHandler(svc *service.PushNotificationService) *PushNotif
 }
 
 type pushNotificationConfigRequest struct {
-	Enabled            *bool   `json:"enabled"`
-	SendKey            *string `json:"send_key"`
-	ClearSendKey       bool    `json:"clear_send_key"`
-	HitDailyCap        *int    `json:"hit_daily_cap"`
-	HitWindowMinutes   *int    `json:"hit_window_minutes"`
-	DailyReportEnabled *bool   `json:"daily_report_enabled"`
-	DailyReportHour    *int    `json:"daily_report_hour"`
-	OpsCriticalEnabled *bool   `json:"ops_critical_enabled"`
+	Enabled             *bool   `json:"enabled"`
+	SendKey             *string `json:"send_key"`
+	ClearSendKey        bool    `json:"clear_send_key"`
+	HitDailyCap         *int    `json:"hit_daily_cap"`
+	HitWindowMinutes    *int    `json:"hit_window_minutes"`
+	DailyReportEnabled  *bool   `json:"daily_report_enabled"`
+	DailyReportHour     *int    `json:"daily_report_hour"`
+	AccountAlertEnabled *bool   `json:"account_alert_enabled"`
+	OpsCriticalEnabled  *bool   `json:"ops_critical_enabled"`
 }
 
 func (h *PushNotificationHandler) GetConfig(c *gin.Context) {
@@ -44,7 +45,7 @@ func (h *PushNotificationHandler) UpdateConfig(c *gin.Context) {
 		Enabled: req.Enabled, SendKey: req.SendKey, ClearSendKey: req.ClearSendKey,
 		HitDailyCap: req.HitDailyCap, HitWindowMinutes: req.HitWindowMinutes,
 		DailyReportEnabled: req.DailyReportEnabled, DailyReportHour: req.DailyReportHour,
-		OpsCriticalEnabled: req.OpsCriticalEnabled,
+		OpsCriticalEnabled: req.OpsCriticalEnabled, AccountAlertEnabled: req.AccountAlertEnabled,
 	})
 	if err != nil {
 		response.ErrorFrom(c, err)

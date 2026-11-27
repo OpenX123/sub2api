@@ -94,18 +94,18 @@ func TestPushNotificationConfigMasksKeyAndValidates(t *testing.T) {
 
 	enabled := true
 	_, err = svc.UpdateConfig(ctx, UpdatePushNotificationConfigInput{Enabled: &enabled})
-	require.ErrorContains(t, err, "SendKey")
+	require.ErrorContains(t, err, "Webhook")
 
 	bad := "not-a-key"
 	_, err = svc.UpdateConfig(ctx, UpdatePushNotificationConfigInput{SendKey: &bad})
-	require.ErrorContains(t, err, "SCT")
+	require.ErrorContains(t, err, "Webhook")
 
-	key := "SCT470902TabcDEF123"
+	key := "https://open.feishu.cn/open-apis/bot/v2/hook/00000000-0000-0000-0000-00000000f123"
 	hitCap := 5000
 	view, err = svc.UpdateConfig(ctx, UpdatePushNotificationConfigInput{Enabled: &enabled, SendKey: &key, HitDailyCap: &hitCap})
 	require.NoError(t, err)
 	require.True(t, view.SendKeyConfigured)
-	require.Equal(t, "********F123", view.SendKeyMasked)
+	require.Equal(t, "********f123", view.SendKeyMasked)
 	require.Equal(t, 1000, view.HitDailyCap)
 	raw, _ := json.Marshal(view)
 	require.NotContains(t, string(raw), key)
@@ -120,11 +120,11 @@ func TestPushNotificationConfigMasksKeyAndValidates(t *testing.T) {
 
 	// clearing the key while enabled is rejected
 	_, err = svc.UpdateConfig(ctx, UpdatePushNotificationConfigInput{ClearSendKey: true})
-	require.ErrorContains(t, err, "SendKey")
+	require.ErrorContains(t, err, "Webhook")
 }
 
 func TestPushNotificationSendTestBypassesQueue(t *testing.T) {
-	key := "SCT470902TabcDEF123"
+	key := "https://open.feishu.cn/open-apis/bot/v2/hook/00000000-0000-0000-0000-00000000f123"
 	raw, _ := json.Marshal(PushNotificationConfig{Enabled: false, SendKey: key})
 	sender := &fakePushSender{}
 	svc := NewPushNotificationService(&contentModerationTestSettingRepo{values: map[string]string{SettingKeyPushNotificationConfig: string(raw)}}, &fakePushStore{}, sender)

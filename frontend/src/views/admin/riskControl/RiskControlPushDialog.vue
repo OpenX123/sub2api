@@ -16,7 +16,7 @@
           autocomplete="off"
           class="input"
           data-test="push-send-key"
-          :placeholder="configured ? maskedKey : 'SCT...'"
+          :placeholder="configured ? maskedKey : 'https://open.feishu.cn/open-apis/bot/v2/hook/...'"
         />
         <p class="input-hint">
           {{ configured ? t('admin.riskControl.push.sendKeyConfigured', { masked: maskedKey }) : t('admin.riskControl.push.sendKeyHint') }}

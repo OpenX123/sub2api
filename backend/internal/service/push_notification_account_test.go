@@ -102,7 +102,7 @@ func TestPushAccountErrorsListFailureAndTruncation(t *testing.T) {
 }
 
 func TestPushConfigAccountAlertDefaultsOnForOldConfig(t *testing.T) {
-	cfg, err := parsePushNotificationConfig(`{"enabled":true,"send_key":"SCT1"}`)
+	cfg, err := parsePushNotificationConfig(`{"enabled":true,"send_key":"https://open.feishu.cn/open-apis/bot/v2/hook/00000000-0000-0000-0000-000000000001"}`)
 	require.NoError(t, err)
 	require.True(t, cfg.AccountAlertEnabled)
 	require.True(t, cfg.view().AccountAlertEnabled)

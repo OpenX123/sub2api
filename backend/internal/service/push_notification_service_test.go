@@ -12,7 +12,7 @@ import (
 func newEnabledPushService(t *testing.T, mutate func(*PushNotificationConfig)) (*PushNotificationService, *fakePushSender, *fakePushStore) {
 	t.Helper()
 	cfg := defaultPushNotificationConfig()
-	cfg.Enabled, cfg.SendKey = true, "SCT470902TabcDEF123"
+	cfg.Enabled, cfg.SendKey = true, "https://open.feishu.cn/open-apis/bot/v2/hook/00000000-0000-0000-0000-00000000f123"
 	if mutate != nil {
 		mutate(cfg)
 	}

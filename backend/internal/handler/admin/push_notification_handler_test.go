@@ -67,17 +67,17 @@ func TestPushNotificationHandlerUpdateHidesKey(t *testing.T) {
 	router.PUT("/push/config", h.UpdateConfig)
 	router.GET("/push/config", h.GetConfig)
 
-	body := `{"enabled":true,"send_key":"SCT470902TabcDEF123","hit_daily_cap":200}`
+	body := `{"enabled":true,"send_key":"https://open.feishu.cn/open-apis/bot/v2/hook/00000000-0000-0000-0000-00000000f123","hit_daily_cap":200}`
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, httptest.NewRequest(http.MethodPut, "/push/config", strings.NewReader(body)))
 
 	require.Equal(t, http.StatusOK, w.Code)
 	require.Contains(t, w.Body.String(), `"send_key_configured":true`)
 	require.Contains(t, w.Body.String(), `"hit_daily_cap":200`)
-	require.NotContains(t, w.Body.String(), "SCT470902TabcDEF123")
+	require.NotContains(t, w.Body.String(), "https://open.feishu.cn/open-apis/bot/v2/hook/00000000-0000-0000-0000-00000000f123")
 
 	w = httptest.NewRecorder()
 	router.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/push/config", nil))
 	require.Equal(t, http.StatusOK, w.Code)
-	require.NotContains(t, w.Body.String(), "SCT470902TabcDEF123")
+	require.NotContains(t, w.Body.String(), "https://open.feishu.cn/open-apis/bot/v2/hook/00000000-0000-0000-0000-00000000f123")
 }

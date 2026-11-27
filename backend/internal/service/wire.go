@@ -12,8 +12,8 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/payment"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/antigravity"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/claude"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/feishu"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
-	"github.com/Wei-Shaw/sub2api/internal/pkg/serverchan"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/xai"
 	"github.com/google/wire"
 	"github.com/redis/go-redis/v9"
@@ -594,7 +594,7 @@ func ProvideContentModerationDailyReportService(
 
 // ProvidePushNotificationService creates and starts the ServerChan push service.
 func ProvidePushNotificationService(settingRepo SettingRepository, store PushNotificationStore, accountRepo AccountRepository) *PushNotificationService {
-	svc := NewPushNotificationService(settingRepo, store, serverchan.NewClient(&http.Client{Timeout: 10 * time.Second}))
+	svc := NewPushNotificationService(settingRepo, store, feishu.Client{HTTP: &http.Client{Timeout: 10 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}})
 	if accountRepo != nil {
 		svc.SetAccountSource(accountRepo)
 	}

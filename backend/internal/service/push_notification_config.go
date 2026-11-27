@@ -8,7 +8,7 @@ import (
 	"strings"
 
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
-	"github.com/Wei-Shaw/sub2api/internal/pkg/serverchan"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/feishu"
 )
 
 const (
@@ -93,6 +93,10 @@ func parsePushNotificationConfig(raw string) (*PushNotificationConfig, error) {
 			return nil, fmt.Errorf("parse push notification config: %w", err)
 		}
 	}
+	if cfg.SendKey != "" && !feishu.ValidWebhook(cfg.SendKey) {
+		cfg.SendKey = ""
+		cfg.Enabled = false
+	}
 	cfg.normalize()
 	return cfg, nil
 }
@@ -138,8 +142,8 @@ func (s *PushNotificationService) UpdateConfig(ctx context.Context, in UpdatePus
 		cfg.SendKey = ""
 	} else if in.SendKey != nil && strings.TrimSpace(*in.SendKey) != "" {
 		key := strings.TrimSpace(*in.SendKey)
-		if !serverchan.ValidSendKey(key) {
-			return nil, infraerrors.BadRequest("INVALID_PUSH_SEND_KEY", "Server酱 SendKey 格式不正确（应以 SCT 开头）")
+		if !feishu.ValidWebhook(key) {
+			return nil, infraerrors.BadRequest("INVALID_PUSH_SEND_KEY", "飞书 Webhook 地址格式不正确")
 		}
 		cfg.SendKey = key
 	}
@@ -166,7 +170,7 @@ func (s *PushNotificationService) UpdateConfig(ctx context.Context, in UpdatePus
 	}
 	cfg.normalize()
 	if cfg.Enabled && cfg.SendKey == "" {
-		return nil, infraerrors.BadRequest("PUSH_SEND_KEY_REQUIRED", "启用推送前需要填写 Server酱 SendKey")
+		return nil, infraerrors.BadRequest("PUSH_SEND_KEY_REQUIRED", "启用推送前需要填写 飞书 Webhook")
 	}
 	raw, err := json.Marshal(cfg)
 	if err != nil {
@@ -185,12 +189,12 @@ func (s *PushNotificationService) SendTest(ctx context.Context) error {
 		return err
 	}
 	if cfg.SendKey == "" {
-		return infraerrors.BadRequest("PUSH_SEND_KEY_REQUIRED", "请先填写并保存 Server酱 SendKey")
+		return infraerrors.BadRequest("PUSH_SEND_KEY_REQUIRED", "请先填写并保存 飞书 Webhook")
 	}
 	if s.sender == nil {
 		return errors.New("push sender unavailable")
 	}
-	if err := s.sender.Send(ctx, cfg.SendKey, "【测试】sub2api 推送测试", "收到这条消息说明微信推送已经接通。"); err != nil {
+	if err := s.sender.Send(ctx, cfg.SendKey, "【测试】sub2api 推送测试", "- 通知渠道：飞书机器人\n- 消息格式：原生富文本"); err != nil {
 		return infraerrors.BadRequest("PUSH_TEST_FAILED", "推送失败："+err.Error())
 	}
 	return nil
