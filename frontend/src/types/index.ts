@@ -1269,7 +1269,6 @@ export interface GrokModelDiagnostics {
 }
 
 export interface Account {
-  claude_subscription_tier?: 'pro' | 'max' | 'ultra' | 'edu' | 'unknown'
   id: number
   name: string
   notes?: string | null

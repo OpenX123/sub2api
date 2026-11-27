@@ -242,9 +242,6 @@
                 </template>
               </HelpTooltip>
               <span v-else class="font-medium text-gray-900 dark:text-white">{{ value }}</span>
-              <span v-if="row.platform === 'anthropic'" class="text-xs text-gray-500 dark:text-gray-400">
-                {{ t('admin.accounts.claudeTier.label') }} · {{ t('admin.accounts.claudeTier.' + (row.claude_subscription_tier || 'unknown')) }}
-              </span>
               <span
                 v-if="accountDisplayEmail(row)"
                 class="text-xs text-gray-500 dark:text-gray-400 truncate max-w-[200px]"

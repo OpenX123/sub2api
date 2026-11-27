@@ -43,10 +43,17 @@ WITH claude AS (
  SELECT * FROM leaders WHERE pos<=3
  UNION ALL
  (SELECT * FROM leaders WHERE pos>3 AND growth>0 ORDER BY growth DESC,user_id LIMIT 2)
+), names AS (
+ SELECT s.*,coalesce(nullif(btrim(u.username),''),nullif(btrim(u.email),''),'未命名用户') base_name
+ FROM selected s LEFT JOIN users u ON u.id=s.user_id
+), trend_users AS (
+ SELECT n.*,CASE WHEN count(*) OVER (PARTITION BY base_name)>1
+ THEN format('%s（%s）',base_name,row_number() OVER (PARTITION BY base_name ORDER BY user_id))
+ ELSE base_name END display_name FROM names n
 ), points AS (
- SELECT h.bucket,s.user_id,coalesce(u.tokens,0) tokens
+ SELECT h.bucket,s.user_id,s.display_name,coalesce(u.tokens,0) tokens
  FROM generate_series($1::timestamptz-interval '24 hours',$1::timestamptz-interval '1 hour',interval '1 hour') h(bucket)
- CROSS JOIN selected s LEFT JOIN hourly u ON u.user_id=s.user_id AND u.bucket=h.bucket
+ CROSS JOIN trend_users s LEFT JOIN hourly u ON u.user_id=s.user_id AND u.bucket=h.bucket
 ), spend AS (
  SELECT user_id,sum(actual_cost) cost,count(*) requests FROM usage_logs
  WHERE created_at >= $3::timestamptz AND created_at < $2 GROUP BY user_id
@@ -91,8 +98,8 @@ SELECT jsonb_build_object(
  'RiskRows',(SELECT jsonb_agg(line ORDER BY pos) FROM lines WHERE sec=2 AND pos>0),
  'SpendRows',(SELECT jsonb_agg(line ORDER BY pos) FROM lines WHERE sec=3 AND pos>0),
  'ErrorRows',(SELECT jsonb_agg(line ORDER BY pos) FROM lines WHERE sec=4 AND pos BETWEEN 1 AND 5)
- ,'Trend',(SELECT jsonb_agg(jsonb_build_object('hour',to_char(bucket AT TIME ZONE 'Asia/Shanghai','HH24:MI'),'user','#'||user_id,'millions',round(tokens::numeric/1000000,4)) ORDER BY bucket,user_id) FROM points)
- ,'TrendRows',(SELECT jsonb_agg(format('#%s · %s 次请求 · %s M Token · $%s · 近 3h 增减 %s M',user_id,requests,round(tokens/1000000,2),round(cost,2),round(growth/1000000,2)) ORDER BY pos) FROM selected)
+ ,'Trend',(SELECT jsonb_agg(jsonb_build_object('hour',to_char(bucket AT TIME ZONE 'Asia/Shanghai','HH24:MI'),'user',display_name,'millions',round(tokens::numeric/1000000,4)) ORDER BY bucket,user_id) FROM points)
+ ,'TrendRows',(SELECT jsonb_agg(format('%s · %s 次请求 · %s M Token · $%s · 近 3h 增减 %s M',display_name,requests,round(tokens/1000000,2),round(cost,2),round(growth/1000000,2)) ORDER BY pos) FROM trend_users)
  ,'TokenShare',(SELECT round(100*sum(tokens) FILTER (WHERE pos<=3)/nullif(sum(tokens),0),1)::text FROM leaders)
  ,'SpendShare',(SELECT round(100*sum(cost) FILTER (WHERE pos<=3)/nullif(sum(cost),0),1)::text FROM spend_rank)
  ,'ErrorImpact',(SELECT format('%s / %s 位活跃用户（%s）',count(DISTINCT user_id),(SELECT count(*) FROM active_users),

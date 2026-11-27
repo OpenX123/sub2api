@@ -63,7 +63,6 @@ func (s *ContentModerationDailyReportService) sendOperationsDigest(ctx context.C
 	if err != nil {
 		return err
 	}
-	card.TierRows = tierCapacityRows(s.tierCapacity(ctx, accounts, load, false, now))
 	for _, n := range load {
 		current += n
 	}
@@ -86,6 +85,6 @@ func (s *ContentModerationDailyReportService) sendOperationsDigest(ctx context.C
 		return err
 	}
 	slog.Info("operations_digest.sent", "slot", token, "trend_points", len(card.Trend),
-		"risk_examples", len(card.Examples), "tier_rows", len(card.TierRows), "suggestions", len(card.Suggestions))
+		"risk_examples", len(card.Examples), "suggestions", len(card.Suggestions))
 	return s.push.settingRepo.Set(ctx, digestCheckpoint, token)
 }

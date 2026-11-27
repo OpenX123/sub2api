@@ -98,20 +98,6 @@ describe('BulkEditAccountModal', () => {
     } as any)
   })
 
-  it.each(['edu', '', 'unknown'])('批量设置 Claude 套餐 %s 时仅提交套餐标签', async (tier) => {
-    const wrapper = mountModal({ selectedPlatforms: ['anthropic'] })
-    await wrapper.get('#bulk-claude-tier').setValue(tier)
-    await wrapper.get('#bulk-edit-account-form').trigger('submit.prevent')
-    await flushPromises()
-    expect(adminAPI.accounts.bulkUpdate).toHaveBeenCalledWith([1, 2], {
-      extra: { claude_subscription_tier: tier }
-    })
-  })
-
-  it('混合平台不显示 Claude 套餐标注', () => {
-    expect(mountModal({ selectedPlatforms: ['anthropic', 'openai'] }).find('#bulk-claude-tier').exists()).toBe(false)
-  })
-
   it('批量修改倍率时提示自动同步账号需要先关闭同步', async () => {
     const wrapper = mountModal()
 

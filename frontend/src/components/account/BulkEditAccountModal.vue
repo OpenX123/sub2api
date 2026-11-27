@@ -1350,17 +1350,6 @@
         </div>
       </div>
 
-      <div v-if="allAnthropic" class="border-t border-gray-200 pt-4 dark:border-dark-600">
-        <label for="bulk-claude-tier" class="input-label">{{ t('admin.accounts.claudeTier.label') }}</label>
-        <select id="bulk-claude-tier" v-model="claudeTier" class="input">
-          <option value="keep">{{ t('admin.accounts.claudeTier.keep') }}</option>
-          <option value="">{{ t('admin.accounts.claudeTier.auto') }}</option>
-          <option v-for="tier in ['pro', 'max', 'ultra', 'edu', 'unknown']" :key="tier" :value="tier">
-            {{ t('admin.accounts.claudeTier.' + tier) }}
-          </option>
-        </select>
-      </div>
-
       <!-- RPM Limit (仅全部为 Anthropic OAuth/SetupToken 时显示) -->
       <div v-if="allAnthropicOAuthOrSetupToken" class="border-t border-gray-200 pt-4 dark:border-dark-600">
         <div class="mb-3 flex items-center justify-between">
@@ -1707,8 +1696,6 @@ const appStore = useAppStore()
 const targetMode = computed(() => props.target?.mode ?? 'selected')
 const targetPreviewCount = computed(() => props.target?.previewCount ?? props.accountIds.length)
 const targetSelectedPlatforms = computed(() => props.target?.selectedPlatforms ?? props.selectedPlatforms)
-const allAnthropic = computed(() => targetSelectedPlatforms.value.length === 1 && targetSelectedPlatforms.value[0] === 'anthropic')
-const claudeTier = ref('keep')
 const targetSelectedTypes = computed(() => props.target?.selectedTypes ?? props.selectedTypes)
 // Grok 快捷端点仅在所选账号全部为 grok 平台时展示（其他平台不显示）
 const allTargetsGrok = computed(
@@ -2303,10 +2290,6 @@ const buildUpdatePayload = (): Record<string, unknown> | null => {
     credentialsChanged = true
   }
 
-  if (allAnthropic.value && claudeTier.value !== 'keep') {
-    ensureExtra().claude_subscription_tier = claudeTier.value
-  }
-
   // RPM limit settings (写入 extra 字段)
   if (enableRpmLimit.value) {
     const extra = ensureExtra()
@@ -2424,7 +2407,6 @@ const handleSubmit = async () => {
     enableOpenAICompactMode.value ||
     enableOpenAICompactModelMapping.value ||
     enableRpmLimit.value ||
-    (allAnthropic.value && claudeTier.value !== 'keep') ||
     (enableCacheTTLOverride.value && allAnthropicOAuthOrSetupToken.value) ||
     userMsgQueueMode.value !== null
 
@@ -2580,7 +2562,6 @@ watch(
       enableOpenAICompactMode.value = false
       enableOpenAICompactModelMapping.value = false
       enableRpmLimit.value = false
-      claudeTier.value = 'keep'
       enableCacheTTLOverride.value = false
 
       // Reset all values

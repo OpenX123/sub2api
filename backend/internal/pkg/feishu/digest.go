@@ -12,7 +12,7 @@ type DigestCard struct {
 	RPM, Latency, Duration                       string
 	Highlight, Risk, Spend, Errors               string
 	RiskRows, SpendRows, ErrorRows               []string
-	TierRows, Examples, TrendRows, Suggestions   []string
+	Examples, TrendRows, Suggestions             []string
 	TokenShare, SpendShare, ErrorImpact          string
 	Trend                                        []TrendPoint
 }
@@ -49,7 +49,7 @@ func (d DigestCard) payload() component {
 	}
 	items = append(items, metricPair("Claude 可用　"+d.Pool, "当前并发　"+d.Concurrency),
 		metricPair("每分钟请求　"+d.RPM, "首字 P95　"+d.Latency),
-		detailPanel("Claude 套餐容量 · 总耗时 P95 "+d.Duration, append([]string{d.PoolDetail}, d.TierRows...)),
+		detailPanel("号池详情 · 总耗时 P95 "+d.Duration, []string{d.PoolDetail}),
 		component{"tag": "hr"}, detailPanel(d.Risk, d.RiskRows))
 	if len(d.Examples) > 0 {
 		items = append(items, detailPanel("高频拦截 · 近 3 小时", d.Examples))

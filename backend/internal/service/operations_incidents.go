@@ -134,7 +134,7 @@ func (s *ContentModerationDailyReportService) checkIncidents(ctx context.Context
 		a := &accounts[i]
 		samples = append(samples, incidentSample{key: fmt.Sprintf("account:%d", a.ID), label: fmt.Sprintf("Claude 账号 #%d · 凭据状态", a.ID), unhealthy: claudeCredentialOffline(a, now), known: true, threshold: 1})
 	}
-	if edu := s.tierCapacity(ctx, accounts, nil, true, now)["edu"]; edu != nil {
+	if edu := s.eduCapacity(ctx, accounts, now); edu.total > 0 {
 		// Unknown balances are part of the denominator. An ambiguous majority cannot resolve an existing incident.
 		unknown := edu.total - edu.covered
 		low := edu.low*2 >= edu.total

@@ -241,10 +241,6 @@ func AccountFromServiceShallow(a *service.Account) *Account {
 	}
 	redactedCreds, credsStatus := RedactCredentials(a.Credentials)
 	extra := redactAccountManagedExtra(a.Extra)
-	var claudeTier string
-	if a.Platform == service.PlatformAnthropic {
-		claudeTier = service.ClaudeSubscriptionTier(a.Name, a.Extra)
-	}
 	var ollamaCloudUsage *service.OllamaCloudUsageState
 	if state := service.OllamaCloudUsageStateFromAccount(a); state.Eligible {
 		ollamaCloudUsage = state
@@ -262,7 +258,6 @@ func AccountFromServiceShallow(a *service.Account) *Account {
 		Credentials:             redactedCreds,
 		CredentialsStatus:       credsStatus,
 		Extra:                   extra,
-		ClaudeSubscriptionTier:  claudeTier,
 		OllamaCloudUsage:        ollamaCloudUsage,
 		OpenCodeGoUsage:         openCodeGoUsage,
 		ProxyID:                 a.ProxyID,
@@ -479,8 +474,7 @@ func AccountListItemFromAccount(a *Account) *AccountListItem {
 	return &AccountListItem{
 		ID: a.ID, Name: a.Name, Notes: a.Notes, Platform: a.Platform, Type: a.Type,
 		Credentials: a.Credentials, CredentialsStatus: a.CredentialsStatus, Extra: a.Extra,
-		ClaudeSubscriptionTier: a.ClaudeSubscriptionTier,
-		OllamaCloudUsage:       a.OllamaCloudUsage, OpenCodeGoUsage: a.OpenCodeGoUsage,
+		OllamaCloudUsage: a.OllamaCloudUsage, OpenCodeGoUsage: a.OpenCodeGoUsage,
 		ProxyID: a.ProxyID, ProxyFallbackOriginID: a.ProxyFallbackOriginID, ProxyFallbackOriginName: a.ProxyFallbackOriginName,
 		Concurrency: a.Concurrency, LoadFactor: a.LoadFactor, Priority: a.Priority, RateMultiplier: a.RateMultiplier,
 		Status: a.Status, ErrorMessage: a.ErrorMessage, LastUsedAt: a.LastUsedAt, ExpiresAt: a.ExpiresAt,
