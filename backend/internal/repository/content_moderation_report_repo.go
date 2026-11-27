@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"database/sql"
+	_ "embed"
 	"fmt"
 	"time"
 
@@ -36,4 +37,24 @@ LIMIT $3`, from, to, limit)
 		out = append(out, item)
 	}
 	return out, rows.Err()
+}
+
+//go:embed operations_digest.sql
+var operationsDigestSQL string
+
+func (r *contentModerationRepository) OperationsDigest(ctx context.Context, slot, now, day time.Time) ([]string, error) {
+	rows, err := r.db.QueryContext(ctx, operationsDigestSQL, slot, now, day)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var lines []string
+	for rows.Next() {
+		var line string
+		if err := rows.Scan(&line); err != nil {
+			return nil, err
+		}
+		lines = append(lines, line)
+	}
+	return lines, rows.Err()
 }

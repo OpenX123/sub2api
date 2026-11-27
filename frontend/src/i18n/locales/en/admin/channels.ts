@@ -408,6 +408,7 @@ export default {
         sendKey: 'Feishu bot webhook',
         sendKeyHint: 'Paste the webhook URL from your Feishu custom bot.',
         sendKeyConfigured: 'Configured {masked}; leave empty to keep it',
+        digest: 'Send one operations digest every 3 hours',
         hitDailyCap: 'Daily cap for hit pushes',
         hitWindowMinutes: 'Per-user merge window (minutes)',
         dailyReportHour: 'Daily report hour (Beijing time)',

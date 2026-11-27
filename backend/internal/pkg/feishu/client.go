@@ -66,17 +66,15 @@ func (c Client) Send(ctx context.Context, url, title, body string) error {
 }
 
 type element struct {
-	Tag   string   `json:"tag"`
-	Text  string   `json:"text"`
-	Style []string `json:"style,omitempty"`
-	Href  string   `json:"href,omitempty"`
+	Tag  string `json:"tag"`
+	Text string `json:"text"`
+	Href string `json:"href,omitempty"`
 }
 type post struct {
 	Title   string      `json:"title"`
 	Content [][]element `json:"content"`
 }
 
-func bold(s string) element  { return element{Tag: "text", Text: s, Style: []string{"bold"}} }
 func plain(s string) element { return element{Tag: "text", Text: s} }
 func buildPost(title, body string) post {
 	p := post{Title: title}
@@ -95,11 +93,11 @@ func buildPost(title, body string) post {
 			if heading == "推送" {
 				heading = "推送统计"
 			}
-			row = []element{bold(heading)}
+			row = []element{plain("【" + heading + "】")}
 		case strings.HasPrefix(line, "| ") && strings.HasSuffix(line, " |"):
 			label, value, ok := strings.Cut(strings.TrimSuffix(strings.TrimPrefix(line, "| "), " |"), " | ")
 			if ok {
-				row = []element{bold(label + "："), plain(value)}
+				row = []element{plain(label + "："), plain(value)}
 			}
 		case strings.HasPrefix(line, "[") && strings.HasSuffix(line, ")"):
 			label, href, ok := strings.Cut(line[1:len(line)-1], "](")
@@ -113,12 +111,12 @@ func buildPost(title, body string) post {
 		case strings.HasPrefix(line, "- **"):
 			name, detail, ok := strings.Cut(strings.TrimPrefix(line, "- **"), "**")
 			if ok {
-				row = []element{bold(name), plain(detail)}
+				row = []element{plain(name), plain(detail)}
 			}
 		case strings.HasPrefix(line, "- "):
 			label, value, ok := strings.Cut(strings.TrimPrefix(line, "- "), "：")
 			if ok {
-				row = []element{bold(label + "："), plain(value)}
+				row = []element{plain(label + "："), plain(value)}
 			}
 		}
 		if len(row) == 0 {

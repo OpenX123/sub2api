@@ -318,6 +318,7 @@ export interface PushNotificationConfig {
   send_key_masked: string
   hit_daily_cap: number
   hit_window_minutes: number
+  digest_enabled?: boolean
   daily_report_enabled: boolean
   daily_report_hour: number
   ops_critical_enabled: boolean
@@ -330,6 +331,7 @@ export interface UpdatePushNotificationConfig {
   clear_send_key?: boolean
   hit_daily_cap?: number
   hit_window_minutes?: number
+  digest_enabled?: boolean
   daily_report_enabled?: boolean
   daily_report_hour?: number
   ops_critical_enabled?: boolean

@@ -99,3 +99,11 @@ func TestFormatModerationHitObserveLabel(t *testing.T) {
 	require.Contains(t, msg.desp, "若开拦会被拦")
 	require.NotContains(t, msg.desp, "后台查看")
 }
+
+func TestPushNotifyModerationHitSkipsInDigestMode(t *testing.T) {
+	svc, sender, _ := newEnabledPushService(t, func(c *PushNotificationConfig) { c.DigestEnabled = true })
+	svc.NotifyModerationHit(context.Background(), ModerationHitEvent{UserID: 1, Action: ContentModerationActionBlock, At: time.Now()})
+	drainPushQueue(context.Background(), svc)
+	require.Empty(t, sender.snapshot())
+	require.Empty(t, svc.queue)
+}

@@ -24,11 +24,13 @@ type ContentModerationUserHitCount struct {
 }
 
 type ContentModerationReportRepository interface {
+	OperationsDigest(ctx context.Context, slot, now, day time.Time) ([]string, error)
 	TopFlaggedUsers(ctx context.Context, from, to time.Time, limit int) ([]ContentModerationUserHitCount, error)
 }
 
 // ContentModerationDailyReportService pushes yesterday's audit summary once per Beijing day.
 type ContentModerationDailyReportService struct {
+	ops       *OpsService
 	push      *PushNotificationService
 	stats     ContentModerationStatsStore
 	reports   ContentModerationReportRepository
@@ -82,6 +84,13 @@ func (s *ContentModerationDailyReportService) tick(ctx context.Context) bool {
 		return false
 	}
 	cfg := s.push.loadConfig(ctx)
+	if cfg.Enabled && cfg.DigestEnabled {
+		if err := s.sendOperationsDigest(ctx, cfg, s.now().In(ContentModerationReportLocation())); err != nil {
+			slog.Warn("operations_digest.failed", "error", err)
+			return false
+		}
+		return true
+	}
 	if !cfg.Enabled || !cfg.DailyReportEnabled {
 		return false
 	}

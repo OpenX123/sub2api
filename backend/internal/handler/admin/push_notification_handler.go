@@ -15,6 +15,7 @@ func NewPushNotificationHandler(svc *service.PushNotificationService) *PushNotif
 }
 
 type pushNotificationConfigRequest struct {
+	DigestEnabled       *bool   `json:"digest_enabled"`
 	Enabled             *bool   `json:"enabled"`
 	SendKey             *string `json:"send_key"`
 	ClearSendKey        bool    `json:"clear_send_key"`
@@ -42,7 +43,7 @@ func (h *PushNotificationHandler) UpdateConfig(c *gin.Context) {
 		return
 	}
 	cfg, err := h.service.UpdateConfig(c.Request.Context(), service.UpdatePushNotificationConfigInput{
-		Enabled: req.Enabled, SendKey: req.SendKey, ClearSendKey: req.ClearSendKey,
+		DigestEnabled: req.DigestEnabled, Enabled: req.Enabled, SendKey: req.SendKey, ClearSendKey: req.ClearSendKey,
 		HitDailyCap: req.HitDailyCap, HitWindowMinutes: req.HitWindowMinutes,
 		DailyReportEnabled: req.DailyReportEnabled, DailyReportHour: req.DailyReportHour,
 		OpsCriticalEnabled: req.OpsCriticalEnabled, AccountAlertEnabled: req.AccountAlertEnabled,

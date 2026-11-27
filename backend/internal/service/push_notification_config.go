@@ -21,6 +21,7 @@ const (
 )
 
 type PushNotificationConfig struct {
+	DigestEnabled       bool   `json:"digest_enabled"`
 	Enabled             bool   `json:"enabled"`
 	SendKey             string `json:"send_key,omitempty"`
 	HitDailyCap         int    `json:"hit_daily_cap"`
@@ -32,6 +33,7 @@ type PushNotificationConfig struct {
 }
 
 type PushNotificationConfigView struct {
+	DigestEnabled       bool   `json:"digest_enabled"`
 	Enabled             bool   `json:"enabled"`
 	SendKeyConfigured   bool   `json:"send_key_configured"`
 	SendKeyMasked       string `json:"send_key_masked"`
@@ -44,6 +46,7 @@ type PushNotificationConfigView struct {
 }
 
 type UpdatePushNotificationConfigInput struct {
+	DigestEnabled       *bool
 	Enabled             *bool   `json:"enabled"`
 	SendKey             *string `json:"send_key"`
 	ClearSendKey        bool    `json:"clear_send_key"`
@@ -103,7 +106,7 @@ func parsePushNotificationConfig(raw string) (*PushNotificationConfig, error) {
 
 func (c *PushNotificationConfig) view() *PushNotificationConfigView {
 	v := &PushNotificationConfigView{
-		Enabled: c.Enabled, SendKeyConfigured: c.SendKey != "",
+		DigestEnabled: c.DigestEnabled, Enabled: c.Enabled, SendKeyConfigured: c.SendKey != "",
 		HitDailyCap: c.HitDailyCap, HitWindowMinutes: c.HitWindowMinutes,
 		DailyReportEnabled: c.DailyReportEnabled, DailyReportHour: c.DailyReportHour, OpsCriticalEnabled: c.OpsCriticalEnabled,
 		AccountAlertEnabled: c.AccountAlertEnabled,
@@ -146,6 +149,9 @@ func (s *PushNotificationService) UpdateConfig(ctx context.Context, in UpdatePus
 			return nil, infraerrors.BadRequest("INVALID_PUSH_SEND_KEY", "飞书 Webhook 地址格式不正确")
 		}
 		cfg.SendKey = key
+	}
+	if in.DigestEnabled != nil {
+		cfg.DigestEnabled = *in.DigestEnabled
 	}
 	if in.Enabled != nil {
 		cfg.Enabled = *in.Enabled

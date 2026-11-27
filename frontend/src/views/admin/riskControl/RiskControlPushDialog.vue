@@ -22,7 +22,8 @@
           {{ configured ? t('admin.riskControl.push.sendKeyConfigured', { masked: maskedKey }) : t('admin.riskControl.push.sendKeyHint') }}
         </p>
       </div>
-      <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+      <div class="flex items-center justify-between"><label class="input-label">{{ t('admin.riskControl.push.digest') }}</label><Toggle v-model="form.digest_enabled" /></div>
+      <div v-if="!form.digest_enabled" class="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div>
           <label class="input-label">{{ t('admin.riskControl.push.hitDailyCap') }}</label>
           <input v-model.number="form.hit_daily_cap" type="number" min="1" max="1000" class="input" data-test="push-hit-cap" />
@@ -36,15 +37,15 @@
           <input v-model.number="form.daily_report_hour" type="number" min="0" max="23" class="input" />
         </div>
       </div>
-      <div class="flex items-center justify-between">
+      <div v-if="!form.digest_enabled" class="flex items-center justify-between">
         <p class="text-sm text-gray-900 dark:text-white">{{ t('admin.riskControl.push.dailyReportEnabled') }}</p>
         <Toggle v-model="form.daily_report_enabled" />
       </div>
-      <div class="flex items-center justify-between">
+      <div v-if="!form.digest_enabled" class="flex items-center justify-between">
         <p class="text-sm text-gray-900 dark:text-white">{{ t('admin.riskControl.push.opsCriticalEnabled') }}</p>
         <Toggle v-model="form.ops_critical_enabled" />
       </div>
-      <div class="flex items-center justify-between">
+      <div v-if="!form.digest_enabled" class="flex items-center justify-between">
         <p class="text-sm text-gray-900 dark:text-white">{{ t('admin.riskControl.push.accountAlertEnabled') }}</p>
         <Toggle v-model="form.account_alert_enabled" />
       </div>
@@ -86,6 +87,7 @@ const form = reactive({
   send_key: '',
   hit_daily_cap: 300,
   hit_window_minutes: 30,
+  digest_enabled: false,
   daily_report_enabled: true,
   daily_report_hour: 9,
   ops_critical_enabled: true,
@@ -100,6 +102,7 @@ function apply(cfg: PushNotificationConfig) {
     send_key: '',
     hit_daily_cap: cfg.hit_daily_cap,
     hit_window_minutes: cfg.hit_window_minutes,
+    digest_enabled: !!cfg.digest_enabled,
     daily_report_enabled: cfg.daily_report_enabled,
     daily_report_hour: cfg.daily_report_hour,
     ops_critical_enabled: cfg.ops_critical_enabled,
@@ -122,6 +125,7 @@ async function save() {
       enabled: form.enabled,
       hit_daily_cap: Number(form.hit_daily_cap),
       hit_window_minutes: Number(form.hit_window_minutes),
+      digest_enabled: form.digest_enabled,
       daily_report_enabled: form.daily_report_enabled,
       daily_report_hour: Number(form.daily_report_hour),
       ops_critical_enabled: form.ops_critical_enabled,

@@ -408,6 +408,7 @@ export default {
         sendKey: '飞书机器人 Webhook',
         sendKeyHint: '粘贴飞书自定义机器人的 Webhook 地址。',
         sendKeyConfigured: '已配置 {masked}，留空保持不变',
+        digest: '每 3 小时只发一条运营汇总',
         hitDailyCap: '命中推送每日上限',
         hitWindowMinutes: '同一用户合并窗口（分钟）',
         dailyReportHour: '日报时间（北京时间，点）',

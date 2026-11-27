@@ -117,7 +117,7 @@ func (s *PushNotificationService) enqueue(msg pushMessage) bool {
 
 func (s *PushNotificationService) deliver(ctx context.Context, msg pushMessage) {
 	cfg := s.loadConfig(ctx)
-	if !cfg.Enabled || cfg.SendKey == "" || s.sender == nil {
+	if cfg.DigestEnabled || !cfg.Enabled || cfg.SendKey == "" || s.sender == nil {
 		return
 	}
 	if s.store != nil {
@@ -167,7 +167,7 @@ func (s *PushNotificationService) NotifyModerationHit(ctx context.Context, ev Mo
 		return
 	}
 	cfg := s.loadConfig(ctx)
-	if !cfg.Enabled {
+	if !cfg.Enabled || cfg.DigestEnabled {
 		return
 	}
 	window := time.Duration(cfg.HitWindowMinutes) * time.Minute

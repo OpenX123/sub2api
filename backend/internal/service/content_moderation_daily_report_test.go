@@ -13,6 +13,10 @@ type fakeModerationReportRepo struct {
 	from, to time.Time
 }
 
+func (f *fakeModerationReportRepo) OperationsDigest(context.Context, time.Time, time.Time, time.Time) ([]string, error) {
+	return nil, nil
+}
+
 func (f *fakeModerationReportRepo) TopFlaggedUsers(_ context.Context, from, to time.Time, _ int) ([]ContentModerationUserHitCount, error) {
 	f.from, f.to = from, to
 	return f.top, nil
